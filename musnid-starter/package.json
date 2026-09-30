@@ -1,0 +1,7 @@
+{
+  "name": "musnid",
+  "version": "0.1.0",
+  "private": true,
+  "description": "مُسنِد: التحقق من النصوص الدينية المتداولة في المنشورات",
+  "engines": { "node": ">=18" }
+}
