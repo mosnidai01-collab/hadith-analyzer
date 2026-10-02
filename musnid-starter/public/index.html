@@ -32,6 +32,7 @@ button:disabled{opacity:.5;cursor:wait}
 .src b{display:block;font:600 .8rem 'Readex Pro',sans-serif;color:var(--violet)}
 .v{margin:8px 0;padding-inline-start:12px;border-inline-start:2px solid var(--line);font-size:.95rem}
 .v small{display:block;color:var(--mute)}
+.v .unc{color:var(--warn)}
 .meta{font-size:.85rem;color:var(--mute);margin-top:8px}
 .caution{font-size:.92rem;color:var(--warn);margin-top:8px}
 .diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -42,7 +43,7 @@ button:disabled{opacity:.5;cursor:wait}
 <main>
 <h1>مُسنِد</h1>
 <p class="sub">ألصق نص المنشور أو ارفع صورته، وتصلك بطاقة تحقق لكل آية أو حديث أو قول فيه.</p>
-<div class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. الصور تُعالج ولا تُخزَّن، ولا حسابات ولا سجل للمستخدمين.</div>
+<div class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي (Google Gemini) لقراءته، ويخضع لشروط المزوّد.</div>
 
 <label for="txt" class="sub">نص المنشور</label>
 <textarea id="txt" placeholder="ألصق النص هنا"></textarea>
@@ -82,13 +83,18 @@ function card(c){
   const [label,cls]=BADGE[c.state]||['—','b-mute'];
   let h=`<article class="card"><div class="head"><span>${esc(c.type)}</span><span class="badge ${cls}">${label}</span></div>`;
   h+=`<p class="post">${esc(c.post_text)}</p>`;
+  if(c.reading_warning) h+=`<div class="caution">${esc(c.reading_warning)}</div>`;
+  if(c.attributed_to) h+=`<div class="meta">النسبة كما وردت في المنشور: ${esc(c.attributed_to)}</div>`;
   if(c.publisher_grade) h+=`<div class="meta">حكم الناشر: ${esc(c.publisher_grade)}</div>`;
+  if(c.cited_reference) h+=`<div class="meta">المرجع الذي ذكره المنشور: ${esc(c.cited_reference)} (لم يُتحقق منه في هذه النسخة)</div>`;
   if(c.source_text){
     if(c.state==='found_different'){
       h+=`<div class="diff"><div class="src"><b>نص المنشور</b>${esc(c.post_text)}</div><div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div></div>`;
+      h+=`<div class="caution">الأحكام أدناه تخص لفظ المصدر وحده، ولا تُنقل إلى لفظ المنشور.</div>`;
     } else h+=`<div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div>`;
   }
-  (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}</small></div>`});
+  (c.similar_entries||[]).forEach(s=>{h+=`<div class="meta">لفظ قريب آخر في القاعدة: «${esc(s.matn)}»</div>`});
+  (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}${v.unconfirmed?' <span class="unc">· لم تُراجَع الصفحة الأصلية بعد</span>':''}</small></div>`});
   (c.takhrij_no_verdict||[]).forEach(t=>{h+=`<div class="v">تخريج دون حكم: ${esc(t.takhrij_only)}<small>${esc(t.book)}، ${esc(t.location)}</small></div>`});
   if(c.authentic_alternative) h+=`<div class="v">الوارد في الصحيح، كما نقله ${esc(c.authentic_alternative.by)}: «${esc(c.authentic_alternative.text)}»<small>${esc(c.authentic_alternative.location)}</small></div>`;
   if(c.note) h+=`<div class="meta">${esc(c.note)}</div>`;
