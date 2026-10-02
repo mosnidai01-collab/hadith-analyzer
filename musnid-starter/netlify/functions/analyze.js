@@ -81,12 +81,11 @@ function dice(a, b) {
 }
 
 function bestMatch(text) {
-  let best = null;
-  for (const e of DB.entries) {
-    const s = dice(text, e.matn);
-    if (!best || s > best.score) best = { entry: e, score: s };
-  }
-  return best;
+  const ranked = DB.entries
+    .map((e) => ({ entry: e, score: dice(text, e.matn) }))
+    .sort((a, b) => b.score - a.score);
+  if (!ranked.length) return null;
+  return { ...ranked[0], others: ranked.slice(1, 3).filter((r) => r.score >= MATCH_CLOSE) };
 }
 
 function buildCard(claim) {
@@ -145,6 +144,9 @@ function buildCard(claim) {
       book: t.book, location: t.location, takhrij_only: t.takhrij_only,
     })),
     authentic_alternative: e.authentic_alternative || null,
+    // ألفاظ قريبة أخرى في القاعدة: الحكم يخص لفظ المصدر وحده، فنُنبّه إلى القريب منه
+    similar_entries: exact ? [] : m.others.map((o) => ({
+      id: o.entry.id, matn: o.entry.matn, score: Math.round(o.score * 100) / 100 })),
     scope,
     caution: hasVerdicts ? null
       : 'لم يرد حكم منقول في المصادر المعتمدة لدى الأداة، فلا يُعتمد على هذه البطاقة في نسبته إلى النبي ﷺ، يُحال إلى مختص.',
