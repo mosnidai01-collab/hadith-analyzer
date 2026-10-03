@@ -209,6 +209,25 @@ function buildCard(claim) {
   };
 }
 
+// ---------- المطابقة المباشرة دون نموذج ----------
+// تُزال صيغة النسبة في أول النص («قال رسول الله ﷺ:» ونحوها) وعلامات الاقتباس، ثم يُطابَق الباقي.
+const ATTRIB_RE = /^\s*((?:عن\s+[^:،]{1,40}?\s+قال\s*[:：،,]?\s*)?(?:قال|يقول|وقال)\s+(?:رسول\s+الله|النبي|نبي\s+الله)\s*(?:ﷺ|صلى\s+الله\s+عليه\s+وسلم|\(ﷺ\))?)\s*[:：]?\s*/;
+const DIRECT_MAX_TOKENS = 60;
+function directMatch(raw) {
+  let text = String(raw || '').trim();
+  let attributed = null;
+  const am = text.match(ATTRIB_RE);
+  if (am) { attributed = am[1].trim(); text = text.slice(am[0].length); }
+  text = text.replace(/^[\s«"“(]+|[\s»"”).]+$/g, '').trim();
+  const n = tokens(text).length;
+  if (!n || n > DIRECT_MAX_TOKENS) return null;
+  const m = bestMatch(text);
+  if (!m || !(m.partial || m.score >= MATCH_EXACT)) return null;
+  const type = m.entry.entry_type || 'حديث';
+  const card = buildCard({ type, text, attributed_to: attributed });
+  return card && card.entry_id ? card : null;
+}
+
 // ---------- الاستدعاء (Gemini) ----------
 class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status; }
@@ -261,6 +280,7 @@ async function extract({ text, image, mediaType }) {
 
   const deadline = Date.now() + TIME_BUDGET_MS;
   let last = 'لا نموذج متاح';
+  let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503)
   for (const model of MODELS) {
     const remaining = deadline - Date.now();
     if (remaining < 1500) { last = 'انتهت المهلة'; break; }
@@ -274,7 +294,10 @@ async function extract({ text, image, mediaType }) {
           headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
           body });
       if (res.ok) return { ex: parseModelJson(await res.json()), model };
-      if (FALLBACK_STATUS.has(res.status)) { last = `${res.status} من ${model}`; continue; }
+      if (FALLBACK_STATUS.has(res.status)) {
+        if (res.status === 429 || res.status === 503) busy++;
+        last = `${res.status} من ${model}`; continue;
+      }
       throw new ApiError(`رفض المزوّد الطلب (${res.status})`, 502);
     } catch (err) {
       if (err instanceof ApiError) throw err;
@@ -284,6 +307,7 @@ async function extract({ text, image, mediaType }) {
       clearTimeout(timer);
     }
   }
+  if (busy > 0 && busy === MODELS.length) throw new ApiError(`كل النماذج مزدحمة أو بلغت حصتها: ${last}`, 503);
   throw new ApiError(`فشلت كل النماذج. آخر مشكلة: ${last}`, 504);
 }
 
@@ -304,6 +328,12 @@ exports.handler = async (event) => {
     if (typeof body.image !== 'string' || body.image.length > MAX_IMAGE_B64)
       return reply(413, { error: 'الصورة كبيرة جداً، صغّر حجمها وأعد المحاولة' });
     body.mediaType = ALLOWED_MIME.has(body.mediaType) ? body.mediaType : 'image/jpeg';
+  }
+
+  // نص ملصق يطابق مدخلاً في القاعدة مطابقة تامة أو يُحتوى فيه حرفياً: بطاقة مباشرة دون استدعاء النموذج.
+  if (!body.image) {
+    const direct = directMatch(body.text);
+    if (direct) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع القاعدة (دون نموذج)', cards: [direct], skipped_info_claims: 0 });
   }
 
   try {
@@ -336,6 +366,8 @@ exports.handler = async (event) => {
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
   } catch (err) {
     console.error(err.message);
+    if (err instanceof ApiError && err.status === 503)
+      return reply(503, { error: 'الخدمة مشغولة الآن (بلغ مزوّد النموذج حدّه المؤقت). أعد المحاولة بعد دقيقة. ويمكنك لصق نص الحديث وحده، فيُطابَق مع القاعدة مباشرة دون الحاجة إلى النموذج.' });
     if (err instanceof ApiError && err.status === 504)
       return reply(504, { error: 'استغرق التحليل وقتاً أطول من المسموح. أعد المحاولة، وإن تكرر فجرّب نصاً بدل الصورة.' });
     return reply(502, { error: 'تعذّر إكمال التحليل. أعد المحاولة، وإن تكرر فجرّب نصاً بدل الصورة.' });
@@ -343,4 +375,4 @@ exports.handler = async (event) => {
 };
 
 // للاختبار المحلي فقط
-exports._test = { norm, dice, bestMatch, buildCard, validateEx, DB };
+exports._test = { norm, dice, bestMatch, buildCard, validateEx, directMatch, DB };
