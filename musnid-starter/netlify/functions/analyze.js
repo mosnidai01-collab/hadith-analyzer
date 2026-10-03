@@ -80,13 +80,37 @@ function dice(a, b) {
   return (2 * inter) / (A.length + B.length);
 }
 
+// هل كلمات المنشور متتابعة بعينها داخل لفظ المصدر؟ (منشور مقتطع من حديث أطول)
+const PARTIAL_MIN_TOKENS = 4;
+function containsRun(text, matn) {
+  const A = tokens(text), B = tokens(matn);
+  if (A.length < PARTIAL_MIN_TOKENS || A.length >= B.length) return false;
+  for (let i = 0; i + A.length <= B.length; i++) {
+    let ok = true;
+    for (let j = 0; j < A.length; j++) if (B[i + j] !== A[j]) { ok = false; break; }
+    if (ok) return true;
+  }
+  return false;
+}
+
 function bestMatch(text) {
   let best = null;
   for (const e of DB.entries) {
     const s = dice(text, e.matn);
     if (!best || s > best.score) best = { entry: e, score: s };
   }
-  return best;
+  if (best && best.score >= MATCH_CLOSE) {
+    if (containsRun(text, best.entry.matn)) best.partial = true;
+    return best;
+  }
+  // لا تقارب كافياً: نبحث عن لفظ يحوي نص المنشور حرفياً متتابعاً، ونختار أقصرها
+  let part = null;
+  for (const e of DB.entries) {
+    if (containsRun(text, e.matn) && (!part || tokens(e.matn).length < tokens(part.entry.matn).length)) {
+      part = { entry: e, score: dice(text, e.matn), partial: true };
+    }
+  }
+  return part || best;
 }
 
 // ألفاظ أخرى للحديث نفسه: ما ربطه المراجع في حقل related أولاً، ثم الأقرب مطابقةً.
@@ -138,13 +162,13 @@ function buildCard(claim) {
   const m = bestMatch(claim.text);
   const scope = `بُحث في قاعدة الأحكام الموثقة لدى الأداة (${DB.entries.length} مدخلاً). غياب النتيجة لا يعني عدم صحة النص.`;
 
-  if (!m || m.score < MATCH_CLOSE) {
+  if (!m || (m.score < MATCH_CLOSE && !m.partial)) {
     return { ...base, state: 'not_found', scope,
       note: 'لم يُعثر على مرجع، يُحال إلى مختص.' };
   }
 
   const e = m.entry;
-  const exact = m.score >= MATCH_EXACT;
+  const exact = !m.partial && m.score >= MATCH_EXACT;
   const hasVerdicts = Array.isArray(e.verdicts) && e.verdicts.length > 0;
 
   if (!hasVerdicts && !(e.takhrij_no_verdict || []).length) {
@@ -155,6 +179,7 @@ function buildCard(claim) {
   return {
     ...base,
     similar_entries: relatedEntries(e, claim.text),
+    partial: !!m.partial,
     state: hasVerdicts ? (exact ? 'found_verdict' : 'found_different') : 'found_no_verdict',
     entry_id: e.id,
     entry_type: e.entry_type || 'حديث',
