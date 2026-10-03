@@ -45,7 +45,7 @@ button:disabled{opacity:.5;cursor:wait}
 <main>
 <h1>مُسنِد <span dir="ltr" lang="en">AI</span></h1>
 <p class="sub">ألصق نص المنشور أو ارفع صورته، وتصلك بطاقة تحقق لكل آية أو حديث أو قول فيه.</p>
-<div class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي (Google Gemini) لقراءته، ويخضع لشروط المزوّد.</div>
+<div class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي (Google Gemini) لقراءته، ويخضع لشروط المزوّد. وما لم يوجد في قاعدة الأداة يُبحث عن نصه في الموسوعة الحديثية بموقع الدرر السنية.</div>
 
 <label for="txt" class="sub">نص المنشور</label>
 <textarea id="txt" placeholder="ألصق النص هنا"></textarea>
@@ -79,7 +79,9 @@ $('img').addEventListener('change',e=>{
 
 const BADGE={found_verdict:['وُجد بحكم منقول','b-ok'],found_no_verdict:['وُجد دون حكم منقول','b-warn'],
  found_different:['وُجد بلفظ مختلف','b-warn'],not_found:['لم يُعثر على مرجع','b-mute'],
- out_of_scope:['خارج نطاق الأداة','b-mute'],quran_pending:['مطابقة الآيات قيد التطوير','b-mute']};
+ out_of_scope:['خارج نطاق الأداة','b-mute'],quran_pending:['مطابقة الآيات قيد التطوير','b-mute'],
+ found_dorar:['وُجد في الموسوعة الحديثية (الدرر)','b-warn']};
+const WORDING=r=>r.same_wording?'بلفظ المنشور':r.within?'نص المنشور مقتطع من هذا اللفظ':'لفظ مختلف عن المنشور';
 
 function card(c){
   const [label,cls]=c.partial?['وُجد ضمن لفظ أطول','b-warn']:(BADGE[c.state]||['—','b-mute']);
@@ -98,10 +100,15 @@ function card(c){
   if((c.verdicts||[]).length) h+=`<div class="meta"><b>الأحكام المنقولة على نص المصدر أعلاه:</b></div>`;
   (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}${v.unconfirmed?' <span class="unc">· لم تُراجَع الصفحة الأصلية بعد</span>':''}</small></div>`});
   (c.takhrij_no_verdict||[]).forEach(t=>{h+=`<div class="v">تخريج دون حكم: ${esc(t.takhrij_only)}<small>${esc(t.book)}، ${esc(t.location)}</small></div>`});
+  if((c.dorar||[]).length){
+    h+=`<div class="meta"><b>الألفاظ المطابقة في الموسوعة الحديثية، ولكلٍّ حكمه:</b></div>`;
+    c.dorar.forEach(r=>{h+=`<div class="v"><span class="src" style="display:block;margin:4px 0;font-size:1.1rem">${esc(r.matn)}</span>خلاصة حكم المحدث${r.muhaddith?' ('+esc(r.muhaddith)+')':''} كما في الموسوعة: «${esc(r.grade)}»<small>${esc(r.book||'')}${r.location?'، '+esc(r.location):''}${r.rawi?' · الراوي: '+esc(r.rawi):''} · ${WORDING(r)}</small></div>`});
+  }
   if(c.authentic_alternative) h+=`<div class="v">الوارد في الصحيح، كما نقله ${esc(c.authentic_alternative.by)}: «${esc(c.authentic_alternative.text)}»<small>${esc(c.authentic_alternative.location)}</small></div>`;
   if(c.note) h+=`<div class="meta">${esc(c.note)}</div>`;
   if(c.caution) h+=`<div class="caution">${esc(c.caution)}</div>`;
   if(c.scope) h+=`<div class="meta">نطاق البحث: ${esc(c.scope)}</div>`;
+  if(c.dorar_link) h+=`<div class="meta"><a href="${esc(c.dorar_link)}" target="_blank" rel="noopener">افتح نتائج البحث في موقع الدرر السنية</a></div>`;
   if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. ألصق اللفظ وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
   return h+'</article>';
 }
