@@ -81,10 +81,13 @@ function dice(a, b) {
 }
 
 // هل كلمات المنشور متتابعة بعينها داخل لفظ المصدر؟ (منشور مقتطع من حديث أطول)
+// أربع كلمات متتابعة في أي موضع من اللفظ، أو ثلاث إن كانت أول اللفظ (المنشور يقتبس مطلع الحديث).
 const PARTIAL_MIN_TOKENS = 4;
+const PREFIX_MIN_TOKENS = 3;
 function containsRun(text, matn) {
   const A = tokens(text), B = tokens(matn);
-  if (A.length < PARTIAL_MIN_TOKENS || A.length >= B.length) return false;
+  if (A.length < PREFIX_MIN_TOKENS || A.length >= B.length) return false;
+  if (A.length < PARTIAL_MIN_TOKENS) return A.every((t, j) => B[j] === t);
   for (let i = 0; i + A.length <= B.length; i++) {
     let ok = true;
     for (let j = 0; j < A.length; j++) if (B[i + j] !== A[j]) { ok = false; break; }
