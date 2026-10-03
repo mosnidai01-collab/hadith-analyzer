@@ -80,7 +80,7 @@ const BADGE={found_verdict:['وُجد بحكم منقول','b-ok'],found_no_verd
  out_of_scope:['خارج نطاق الأداة','b-mute'],quran_pending:['مطابقة الآيات قيد التطوير','b-mute']};
 
 function card(c){
-  const [label,cls]=BADGE[c.state]||['—','b-mute'];
+  const [label,cls]=c.partial?['وُجد ضمن لفظ أطول','b-warn']:(BADGE[c.state]||['—','b-mute']);
   let h=`<article class="card"><div class="head"><span>${esc(c.type)}</span><span class="badge ${cls}">${label}</span></div>`;
   h+=`<p class="post">${esc(c.post_text)}</p>`;
   if(c.reading_warning) h+=`<div class="caution">${esc(c.reading_warning)}</div>`;
@@ -90,7 +90,7 @@ function card(c){
   if(c.source_text){
     if(c.state==='found_different'){
       h+=`<div class="diff"><div class="src"><b>نص المنشور</b>${esc(c.post_text)}</div><div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div></div>`;
-      h+=`<div class="caution">الأحكام أدناه تخص لفظ المصدر وحده، ولا تُنقل إلى لفظ المنشور.</div>`;
+      h+=c.partial?`<div class="caution">نص المنشور مقتطع من لفظ أطول في المصدر، والأحكام أدناه على اللفظ بتمامه كما في المصدر.</div>`:`<div class="caution">الأحكام أدناه تخص لفظ المصدر وحده، ولا تُنقل إلى لفظ المنشور.</div>`;
     } else h+=`<div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div>`;
   }
   if((c.similar_entries||[]).length){h+=`<div class="meta">ألفاظ أخرى لهذا الحديث في القاعدة، ولكل لفظ حكمه:</div>`;c.similar_entries.forEach(s=>{h+=`<div class="meta">«${esc(s.matn)}»</div>`})}
