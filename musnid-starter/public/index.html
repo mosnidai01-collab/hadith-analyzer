@@ -36,6 +36,8 @@ button:disabled{opacity:.5;cursor:wait}
 .meta{font-size:.85rem;color:var(--mute);margin-top:8px}
 .caution{font-size:.92rem;color:var(--warn);margin-top:8px}
 .diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.alt{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--mute)}
+.alt q{display:block;margin-top:4px;font-family:'Amiri',serif;font-size:1.05rem;quotes:'«' '»'}
 @media(max-width:560px){.diff{grid-template-columns:1fr}h1{font-size:1.6rem}}
 </style>
 </head>
@@ -93,13 +95,14 @@ function card(c){
       h+=c.partial?`<div class="caution">نص المنشور مقتطع من لفظ أطول في المصدر، والأحكام أدناه على اللفظ بتمامه كما في المصدر.</div>`:`<div class="caution">الأحكام أدناه تخص لفظ المصدر وحده، ولا تُنقل إلى لفظ المنشور.</div>`;
     } else h+=`<div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div>`;
   }
-  if((c.similar_entries||[]).length){h+=`<div class="meta">ألفاظ أخرى لهذا الحديث في القاعدة، ولكل لفظ حكمه:</div>`;c.similar_entries.forEach(s=>{h+=`<div class="meta">«${esc(s.matn)}»</div>`})}
+  if((c.verdicts||[]).length) h+=`<div class="meta"><b>الأحكام المنقولة على نص المصدر أعلاه:</b></div>`;
   (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}${v.unconfirmed?' <span class="unc">· لم تُراجَع الصفحة الأصلية بعد</span>':''}</small></div>`});
   (c.takhrij_no_verdict||[]).forEach(t=>{h+=`<div class="v">تخريج دون حكم: ${esc(t.takhrij_only)}<small>${esc(t.book)}، ${esc(t.location)}</small></div>`});
   if(c.authentic_alternative) h+=`<div class="v">الوارد في الصحيح، كما نقله ${esc(c.authentic_alternative.by)}: «${esc(c.authentic_alternative.text)}»<small>${esc(c.authentic_alternative.location)}</small></div>`;
   if(c.note) h+=`<div class="meta">${esc(c.note)}</div>`;
   if(c.caution) h+=`<div class="caution">${esc(c.caution)}</div>`;
   if(c.scope) h+=`<div class="meta">نطاق البحث: ${esc(c.scope)}</div>`;
+  if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. ألصق اللفظ وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
   return h+'</article>';
 }
 
