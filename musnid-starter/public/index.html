@@ -93,7 +93,7 @@ function card(c){
       h+=`<div class="caution">الأحكام أدناه تخص لفظ المصدر وحده، ولا تُنقل إلى لفظ المنشور.</div>`;
     } else h+=`<div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div>`;
   }
-  (c.similar_entries||[]).forEach(s=>{h+=`<div class="meta">لفظ قريب آخر في القاعدة: «${esc(s.matn)}»</div>`});
+  if((c.similar_entries||[]).length){h+=`<div class="meta">ألفاظ أخرى لهذا الحديث في القاعدة، ولكل لفظ حكمه:</div>`;c.similar_entries.forEach(s=>{h+=`<div class="meta">«${esc(s.matn)}»</div>`})}
   (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}${v.unconfirmed?' <span class="unc">· لم تُراجَع الصفحة الأصلية بعد</span>':''}</small></div>`});
   (c.takhrij_no_verdict||[]).forEach(t=>{h+=`<div class="v">تخريج دون حكم: ${esc(t.takhrij_only)}<small>${esc(t.book)}، ${esc(t.location)}</small></div>`});
   if(c.authentic_alternative) h+=`<div class="v">الوارد في الصحيح، كما نقله ${esc(c.authentic_alternative.by)}: «${esc(c.authentic_alternative.text)}»<small>${esc(c.authentic_alternative.location)}</small></div>`;
