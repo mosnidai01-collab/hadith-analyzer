@@ -89,6 +89,29 @@ function bestMatch(text) {
   return best;
 }
 
+// ألفاظ أخرى للحديث نفسه: ما ربطه المراجع في حقل related أولاً، ثم الأقرب مطابقةً.
+// يُعرض اللفظ وحده دون حكمه، لأن لكل لفظ حكمه.
+const MAX_RELATED = 3;
+function relatedEntries(entry, text) {
+  const out = [];
+  const seen = new Set([entry.id]);
+  for (const r of entry.related || []) {
+    const id = (String(r).match(/^V\d+/) || [])[0];
+    const e = id && DB.entries.find((x) => x.id === id);
+    if (e && !seen.has(e.id)) { seen.add(e.id); out.push({ id: e.id, matn: e.matn }); }
+  }
+  const near = DB.entries
+    .filter((e) => !seen.has(e.id))
+    .map((e) => ({ e, s: dice(text, e.matn) }))
+    .filter((x) => x.s >= MATCH_CLOSE)
+    .sort((a, b) => b.s - a.s);
+  for (const x of near) {
+    if (out.length >= MAX_RELATED) break;
+    seen.add(x.e.id); out.push({ id: x.e.id, matn: x.e.matn });
+  }
+  return out;
+}
+
 function buildCard(claim) {
   const base = {
     type: claim.type,
@@ -131,6 +154,7 @@ function buildCard(claim) {
 
   return {
     ...base,
+    similar_entries: relatedEntries(e, claim.text),
     state: hasVerdicts ? (exact ? 'found_verdict' : 'found_different') : 'found_no_verdict',
     entry_id: e.id,
     entry_type: e.entry_type || 'حديث',
