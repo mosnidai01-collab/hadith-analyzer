@@ -1,6 +1,8 @@
 // مُسنِد: دالة التحليل.
 // دور النموذج هنا: استخراج النص وتقسيمه وتصنيفه فقط. لا يُصدر حكماً على أي نص.
-// الأحكام تأتي حصراً من data/verdicts.json منقولةً كما هي ومنسوبةً إلى قائلها.
+// الأحكام تأتي من data/verdicts.json منقولةً كما هي ومنسوبةً إلى قائلها (الطبقة الأولى)،
+// فإن لم يوجد النص فيها بُحث حيّاً في واجهة الموسوعة الحديثية بالدرر السنية (الطبقة الثانية)،
+// وتُعرض نتائجها كما وردت دون تخزين، مع وسم أنها منقولة بواسطة ولم يُراجَع أصلها.
 
 const fs = require('fs');
 const path = require('path');
@@ -17,6 +19,12 @@ const FALLBACK_STATUS = new Set([403, 404, 429, 500, 502, 503, 504]);
 const ALLOWED_TYPES = new Set(['آية', 'حديث', 'قول منسوب', 'معلومة', 'حكم فقهي']);
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_IMAGE_B64 = 5 * 1024 * 1024; // حد حمولة الدوال نحو 6 ميغابايت
+// الطبقة الثانية: واجهة الموسوعة الحديثية الرسمية (dorar.net/article/389). تُعطَّل بـ DORAR_ENABLED=0
+const DORAR_ENABLED = process.env.DORAR_ENABLED !== '0';
+const DORAR_API = 'https://dorar.net/dorar_api.json';
+const DORAR_MAX_SHOWN = 5;      // أقصى عدد ألفاظ تُعرض في البطاقة
+const DORAR_QUERY_WORDS = 10;   // أول كلمات الادعاء تُرسل للبحث
+const TOTAL_BUDGET_MS = Number(process.env.TOTAL_BUDGET_MS) || 9300; // مهلة الطلب كله
 
 let DB = { entries: [] };
 try {
@@ -231,6 +239,121 @@ function directMatch(raw) {
   return card && card.entry_id ? card : null;
 }
 
+// ---------- الطبقة الثانية: الموسوعة الحديثية (الدرر السنية) ----------
+// لا تُخزَّن النتائج ولا تُنسخ القاعدة: استعلام حيّ عند كل طلب، والعرض بنص الموسوعة كما هو.
+const stripTags = (s) => String(s || '')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+  .replace(/\s+/g, ' ').trim();
+
+// يُرسل النص دون تشكيل وعلامات، مع إبقاء الحروف كما هي (التطبيع الكامل يغيّر الحروف فيُفسد البحث)
+const dorarQuery = (s) => String(s || '')
+  .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+  .replace(/[^\u0621-\u064A0-9\s]/g, ' ')
+  .split(/\s+/).filter(Boolean).slice(0, DORAR_QUERY_WORDS).join(' ');
+
+function parseDorar(html) {
+  const out = [];
+  const blocks = String(html || '').split(/<div class="hadith"[^>]*>/).slice(1);
+  for (const b of blocks) {
+    const end = b.indexOf('</div>');
+    const matn = stripTags(b.slice(0, end)).replace(/^\d+\s*-\s*/, '').replace(/\s*\.$/, '').trim();
+    const info = {};
+    const re = /<span class="info-subtitle">\s*([^<:]+?)\s*:\s*<\/span>([\s\S]*?)(?=<span class="info-subtitle">|<\/div>)/g;
+    let m;
+    while ((m = re.exec(b))) info[m[1].trim()] = stripTags(m[2]);
+    if (matn) out.push({
+      matn,
+      rawi: info['الراوي'] || null,
+      muhaddith: info['المحدث'] || null,
+      book: info['المصدر'] || null,
+      location: info['الصفحة أو الرقم'] || null,
+      grade: info['خلاصة حكم المحدث'] || null,
+    });
+  }
+  return out;
+}
+
+async function dorarSearch(text, timeoutMs) {
+  const q = dorarQuery(text);
+  if (!q || timeoutMs < 800) return { error: 'time' };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${DORAR_API}?skey=${encodeURIComponent(q)}`, {
+      signal: ctrl.signal, headers: { 'user-agent': 'musnid-ai (hackathon; contact via GitHub)' } });
+    if (!res.ok) return { error: `http ${res.status}` };
+    const data = await res.json();
+    return { q, results: parseDorar(data && data.ahadith && data.ahadith.result) };
+  } catch (e) {
+    return { error: e.name === 'AbortError' ? 'time' : 'net' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// يُبقي من نتائج الموسوعة ما يطابق نص الادعاء فعلاً (لا كل ما يحوي كلماته متفرقة)،
+// ولكل لفظ حكمه: لا يُنقل حكم لفظ إلى لفظ آخر.
+function dorarMatches(text, results) {
+  return results
+    .map((r) => {
+      const s = dice(text, r.matn);
+      const within = containsRun(text, r.matn);      // المنشور مقتطع من لفظ الموسوعة
+      const covers = containsRun(r.matn, text);      // لفظ الموسوعة جزء من المنشور
+      return { ...r, score: Math.round(s * 100) / 100, same_wording: s >= MATCH_EXACT,
+        within, ok: s >= MATCH_CLOSE || within || covers };
+    })
+    .filter((r) => r.ok && r.grade)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, DORAR_MAX_SHOWN)
+    .map(({ ok, ...r }) => r);
+}
+
+const DORAR_TYPES = new Set(['حديث', 'قول منسوب']);
+async function enrichWithDorar(cards, deadline) {
+  if (!DORAR_ENABLED) return;
+  const todo = cards.filter((c) => c && c.state === 'not_found' && DORAR_TYPES.has(c.type));
+  await Promise.all(todo.map(async (c) => {
+    const r = await dorarSearch(c.post_text, Math.min(4000, deadline - Date.now()));
+    const link = `https://dorar.net/hadith/search?q=${encodeURIComponent(dorarQuery(c.post_text))}`;
+    if (r.error) {
+      c.scope += ' وتعذّر البحث في الموسوعة الحديثية بالدرر في هذه المحاولة.';
+      c.dorar_link = link;
+      return;
+    }
+    const hits = dorarMatches(c.post_text, r.results);
+    c.dorar_link = link;
+    if (!hits.length) {
+      c.scope += ' وبُحث كذلك في الموسوعة الحديثية بالدرر السنية فلم يُعثر على لفظ مطابق.';
+      return;
+    }
+    c.state = 'found_dorar';
+    c.dorar = hits;
+    c.note = null;
+    c.scope = `لم يوجد في قاعدة الأحكام الموثقة لدى الأداة (${DB.entries.length} مدخلاً)، فبُحث في الموسوعة الحديثية بالدرر السنية، وتُعرض الألفاظ المطابقة وحدها.`;
+    c.caution = 'منقول بواسطة الموسوعة الحديثية بالدرر السنية، ولم تُراجَع المصادر الأصلية بعد. «خلاصة حكم المحدث» من صياغة الموسوعة، وقد لا تكون لفظ المحدّث بعينه. ولكل لفظ حكمه، فلا يُنقل حكم لفظ إلى غيره.';
+  }));
+}
+
+// نص ملصق قصير لم يوجد في القاعدة: إن طابق لفظاً في الموسوعة بتمامه (أو كان مقتطعاً منه)
+// فهو حديث واحد، فتُعرض بطاقته دون استدعاء النموذج (توفيراً لحصة النموذج المحدودة).
+async function directDorar(raw, deadline, requireWhole = true) {
+  if (!DORAR_ENABLED) return null;
+  let text = String(raw || '').trim();
+  let attributed = null;
+  const am = text.match(ATTRIB_RE);
+  if (am) { attributed = am[1].trim(); text = text.slice(am[0].length); }
+  text = text.replace(/^[\s«"“(]+|[\s»"”).]+$/g, '').trim();
+  const n = tokens(text).length;
+  if (n < PREFIX_MIN_TOKENS || n > DIRECT_MAX_TOKENS) return null;
+  const card = buildCard({ type: 'حديث', text, attributed_to: attributed });
+  if (!card || card.state !== 'not_found') return null;
+  await enrichWithDorar([card], deadline);
+  if (card.state !== 'found_dorar') return null;
+  if (requireWhole && !card.dorar.some((r) => r.same_wording || r.within)) return null;
+  return card;
+}
+
 // ---------- الاستدعاء (Gemini) ----------
 class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status; }
@@ -264,7 +387,7 @@ function validateEx(ex) {
   return p;
 }
 
-async function extract({ text, image, mediaType }) {
+async function extract({ text, image, mediaType }, hardDeadline) {
   const parts = [];
   if (image) parts.push({ inline_data: { mime_type: mediaType, data: image } });
   parts.push({ text: image
@@ -281,7 +404,7 @@ async function extract({ text, image, mediaType }) {
     generationConfig: gen,
   });
 
-  const deadline = Date.now() + TIME_BUDGET_MS;
+  const deadline = Math.min(Date.now() + TIME_BUDGET_MS, hardDeadline || Infinity);
   let last = 'لا نموذج متاح';
   let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503)
   for (const model of MODELS) {
@@ -321,6 +444,8 @@ const reply = (code, obj) => ({
 });
 
 exports.handler = async (event) => {
+  const t0 = Date.now();
+  const deadline = t0 + TOTAL_BUDGET_MS;
   if (event.httpMethod !== 'POST') return reply(405, { error: 'الطريقة غير مدعومة' });
   if (!process.env.GEMINI_API_KEY) return reply(500, { error: 'مفتاح GEMINI_API_KEY غير مضبوط في متغيرات البيئة' });
 
@@ -337,11 +462,13 @@ exports.handler = async (event) => {
   if (!body.image) {
     const direct = directMatch(body.text);
     if (direct) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع القاعدة (دون نموذج)', cards: [direct], skipped_info_claims: 0 });
+    const viaDorar = await directDorar(body.text, Math.min(deadline, Date.now() + 3000));
+    if (viaDorar) return reply(200, { status: 'ok', confidence: 1, model_used: 'بحث مباشر في الموسوعة الحديثية (دون نموذج)', cards: [viaDorar], skipped_info_claims: 0 });
   }
 
   try {
     // الصورة تُعالج في الذاكرة ولا تُخزَّن عندنا.
-    const { ex, model } = await extract(body);
+    const { ex, model } = await extract(body, deadline);
 
     const problems = validateEx(ex);
     if (problems.length) {
@@ -365,10 +492,19 @@ exports.handler = async (event) => {
     });
 
     const cards = ex.claims.map(buildCard).filter(Boolean);
+    await enrichWithDorar(cards, deadline);
     return reply(200, { status: 'ok', confidence: ex.confidence, model_used: model, cards,
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
   } catch (err) {
     console.error(err.message);
+    // إن تعذّر النموذج والنص قصير: نعرض ما يطابقه في الموسوعة إن وُجد، مع التنبيه.
+    if (!body.image && err instanceof ApiError && (err.status === 503 || err.status === 504)) {
+      const fb = await directDorar(body.text, deadline + 400, false).catch(() => null);
+      if (fb) {
+        fb.reading_warning = 'تعذّر تقسيم المنشور بالنموذج الآن، فبُحث عن النص كله بوصفه ادعاءً واحداً.';
+        return reply(200, { status: 'ok', confidence: 1, model_used: 'الموسوعة الحديثية (النموذج مشغول)', cards: [fb], skipped_info_claims: 0 });
+      }
+    }
     if (err instanceof ApiError && err.status === 503)
       return reply(503, { error: 'الخدمة مشغولة الآن (بلغ مزوّد النموذج حدّه المؤقت). أعد المحاولة بعد دقيقة. ويمكنك لصق نص الحديث وحده، فيُطابَق مع القاعدة مباشرة دون الحاجة إلى النموذج.' });
     if (err instanceof ApiError && err.status === 504)
@@ -378,4 +514,4 @@ exports.handler = async (event) => {
 };
 
 // للاختبار المحلي فقط
-exports._test = { norm, dice, bestMatch, buildCard, validateEx, directMatch, DB };
+exports._test = { directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };
