@@ -149,8 +149,17 @@ function buildCard(claim) {
   if (claim.type === 'معلومة') return null; // لا بطاقة
 
   if (claim.type === 'حكم فقهي') {
-    return { ...base, state: 'out_of_scope',
-      note: 'هذا حكم فقهي، والتحقق منه خارج نطاق الأداة، يُرجع فيه إلى جهة مؤهلة.' };
+    // القاعدة هي الفيصل لا تصنيف النموذج: إن طابق النص مدخلاً حديثياً في القاعدة عُرضت بطاقته.
+    const fm = bestMatch(claim.text);
+    const fe = fm && (fm.score >= MATCH_CLOSE || fm.partial) ? fm.entry : null;
+    const usable = fe && fe.entry_type !== 'حكم فقهي' &&
+      ((fe.verdicts || []).length || (fe.takhrij_no_verdict || []).length);
+    if (!usable) {
+      return { ...base, state: 'out_of_scope',
+        note: 'هذا حكم فقهي، والتحقق منه خارج نطاق الأداة، يُرجع فيه إلى جهة مؤهلة.' };
+    }
+    claim = { ...claim, type: fe.entry_type || 'حديث' };
+    base.type = claim.type;
   }
 
   if (claim.type === 'آية') {
