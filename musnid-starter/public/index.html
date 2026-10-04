@@ -38,6 +38,23 @@ button:disabled{opacity:.5;cursor:wait}
 .diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .alt{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--mute)}
 .alt q{display:block;margin-top:4px;font-family:'Amiri',serif;font-size:1.05rem;quotes:'«' '»'}
+/* خطوط مجمع الملك فهد لكل رواية (مستضافة في public/fonts، وتُحمَّل عند الحاجة فقط) */
+@font-face{font-family:kf-hafs;src:url(/fonts/hafs.18.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-shouba;src:url(/fonts/shouba.8.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-warsh;src:url(/fonts/warsh.10.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-qaloon;src:url(/fonts/qaloon.10.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-doori;src:url(/fonts/doori.9.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-soosi;src:url(/fonts/soosi.9.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-bazzi;src:url(/fonts/bazzi.7.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-qumbul;src:url(/fonts/qumbul.7.woff2) format("woff2");font-display:swap}
+.ayah{font-size:1.45rem;line-height:2.3;border-inline-start-color:var(--ok);background:#EEF8F4}
+.ayah b{color:var(--ok)}
+.qsum{font-weight:600;color:var(--ok);margin:6px 0}
+.qsum.w{color:var(--warn)}
+.ql{font-size:.9rem;color:var(--mute);margin:2px 0}
+mark{background:#FCEBD0;color:inherit;border-radius:3px;padding:0 2px}
+.wd{font-size:.95rem;margin:4px 0}
+.wd span{font-family:'Amiri',serif;font-size:1.1rem}
 @media(max-width:560px){.diff{grid-template-columns:1fr}h1{font-size:1.6rem}}
 </style>
 </head>
@@ -79,9 +96,41 @@ $('img').addEventListener('change',e=>{
 
 const BADGE={found_verdict:['وُجد بحكم منقول','b-ok'],found_no_verdict:['وُجد دون حكم منقول','b-warn'],
  found_different:['وُجد بلفظ مختلف','b-warn'],not_found:['لم يُعثر على مرجع','b-mute'],
- out_of_scope:['خارج نطاق الأداة','b-mute'],quran_pending:['مطابقة الآيات قيد التطوير','b-mute'],
+ out_of_scope:['خارج نطاق الأداة','b-mute'],quran_found:['وُجد في المصحف','b-ok'],quran_different:['وُجد بلفظ مختلف','b-warn'],
  found_dorar:['وُجد في الموسوعة الحديثية (الدرر)','b-warn']};
 const WORDING=r=>r.same_wording?'بلفظ المنشور':r.within?'نص المنشور مقتطع من هذا اللفظ':'لفظ مختلف عن المنشور';
+
+const KF={hafs:1,shouba:1,warsh:1,qaloon:1,doori:1,soosi:1,bazzi:1,qumbul:1};
+function ayah(src){
+  const f=KF[src.riwaya]?`font-family:kf-${src.riwaya},'Amiri',serif`:'';
+  return `<div class="src ayah" style="${f}"><b>نص المصحف: رواية ${esc(src.riwaya_name)} · ${esc(src.where)}</b>${esc(src.text)}</div>`;
+}
+const marked=arr=>arr.map(([w,d])=>d?`<mark>${esc(w)}</mark>`:esc(w)).join(' ');
+function quranBlock(q){
+  let h=`<div class="qsum${q.agreeing||!q.diff&&!q.word_diffs?'':' w'}">${esc(q.summary)}</div>`;
+  if(q.diff){
+    h+=`<div class="diff"><div class="src"><b>نص المنشور</b>${marked(q.diff.post)}</div>${ayah(q.source).replace('<b>','<b>').replace(esc(q.source.text),marked(q.diff.source))}</div>`;
+  } else h+=ayah(q.source);
+  if((q.word_diffs||[]).length){
+    h+=`<div class="meta"><b>مواضع الاختلاف في التشكيل عن هذه الرواية:</b></div>`;
+    const sf=KF[q.source.riwaya]?` style="font-family:kf-${q.source.riwaya},'Amiri',serif"`:'';
+    q.word_diffs.forEach(d=>{h+=`<div class="wd">المنشور: <span>${esc(d.post)}</span> ← المصحف: <span${sf}>${esc(d.source)}</span></div>`});
+  }
+  if((q.groups||[]).length>1||(q.groups||[]).length===1&&q.groups[0].riwayat.length>1){
+    h+=`<div class="meta"><b>موضع الآية (يختلف عدّ الآي بين الروايات):</b></div>`;
+    q.groups.forEach(g=>{h+=`<div class="ql">${esc(g.where)}: ${esc(g.riwayat.join('، '))}</div>`});
+  }
+  const QP={hafs:1,warsh:4,bazzi:5,doori:6,qaloon:7,qumbul:8,shouba:9,soosi:10};
+  if(QP[q.source.riwaya]&&q.source.sura_no) h+=`<div class="meta"><a href="https://quranpedia.net/surah/${QP[q.source.riwaya]}/${q.source.sura_no}" target="_blank" rel="noopener">افتح السورة في الموسوعة القرآنية (Quranpedia) برواية ${esc(q.source.riwaya_name)}</a></div>`;
+  if(q.repeated) h+=`<div class="meta">${esc(q.repeated)}</div>`;
+  if(q.missing) h+=`<div class="meta">لا يوافق رسمُه رواية: ${esc(q.missing.join('، '))}.</div>`;
+  if((q.others||[]).length){
+    h+=`<details class="meta"><summary>فروق التشكيل عن الروايات الأخرى</summary>`;
+    q.others.forEach(o=>{h+=`<div class="ql">${esc(o.riwaya_name)}: ${o.word_diffs.map(d=>`${esc(d.post)} ← ${esc(d.source)}`).join('، ')||'—'}</div>`});
+    h+=`</details>`;
+  }
+  return h;
+}
 
 function card(c){
   const [label,cls]=c.partial?['وُجد ضمن لفظ أطول','b-warn']:(BADGE[c.state]||['—','b-mute']);
@@ -91,6 +140,7 @@ function card(c){
   if(c.attributed_to) h+=`<div class="meta">النسبة كما وردت في المنشور: ${esc(c.attributed_to)}</div>`;
   if(c.publisher_grade) h+=`<div class="meta">حكم الناشر: ${esc(c.publisher_grade)}</div>`;
   if(c.cited_reference) h+=`<div class="meta">المرجع الذي ذكره المنشور: ${esc(c.cited_reference)} (لم يُتحقق منه في هذه النسخة)</div>`;
+  if(c.quran) h+=quranBlock(c.quran);
   if(c.source_text){
     if(c.state==='found_different'){
       h+=`<div class="diff"><div class="src"><b>نص المنشور</b>${esc(c.post_text)}</div><div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div></div>`;

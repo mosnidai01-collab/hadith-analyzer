@@ -1,4 +1,5 @@
 // مُسنِد: دالة التحليل.
+// الآيات: تُطابَق مع نصوص مجمع الملك فهد للروايات الثماني (lib/quran.js)، ولا تُسمّى رواية إلا بعد مقارنة التشكيل.
 // دور النموذج هنا: استخراج النص وتقسيمه وتصنيفه فقط. لا يُصدر حكماً على أي نص.
 // الأحكام تأتي من data/verdicts.json منقولةً كما هي ومنسوبةً إلى قائلها (الطبقة الأولى)،
 // فإن لم يوجد النص فيها بُحث حيّاً في واجهة الموسوعة الحديثية بالدرر السنية (الطبقة الثانية)،
@@ -25,6 +26,9 @@ const DORAR_API = 'https://dorar.net/dorar_api.json';
 const DORAR_MAX_SHOWN = 5;      // أقصى عدد ألفاظ تُعرض في البطاقة
 const DORAR_QUERY_WORDS = 10;   // أول كلمات الادعاء تُرسل للبحث
 const TOTAL_BUDGET_MS = Number(process.env.TOTAL_BUDGET_MS) || 9300; // مهلة الطلب كله
+
+// مسار القرآن: مطابقة بالروايات الثماني من نصوص مجمع الملك فهد (lib/quran.js)
+const quran = require('../../lib/quran.js');
 
 let DB = { entries: [] };
 try {
@@ -173,11 +177,7 @@ function buildCard(claim) {
     base.type = claim.type;
   }
 
-  if (claim.type === 'آية') {
-    // مسار القرآن (الروايات الثماني) يُبنى في اليوم الأول من التحدي.
-    return { ...base, state: 'quran_pending',
-      note: 'مطابقة الآيات بالروايات الثماني قيد التطوير في هذه النسخة.' };
-  }
+  if (claim.type === 'آية') return quranCard(base, claim.text);
 
   const m = bestMatch(claim.text);
   const scope = `بُحث في قاعدة الأحكام الموثقة لدى الأداة (${DB.entries.length} مدخلاً). غياب النتيجة لا يعني عدم صحة النص.`;
@@ -218,6 +218,105 @@ function buildCard(claim) {
     caution: hasVerdicts ? null
       : 'لم يرد حكم منقول في المصادر المعتمدة لدى الأداة، فلا يُعتمد على هذه البطاقة في نسبته إلى النبي ﷺ، يُحال إلى مختص.',
   };
+}
+
+// ---------- بطاقة الآية (البند 8.1) ----------
+const QURAN_SCOPE = 'بُحث في نص القرآن الكريم بثماني روايات من نصوص مجمع الملك فهد لطباعة المصحف الشريف كما في الموسوعة القرآنية (Quranpedia.net): حفص وشعبة عن عاصم، وورش وقالون عن نافع، والدوري والسوسي عن أبي عمرو، والبزي وقنبل عن ابن كثير. وما لم يطابقها يُراجَع مع مختص في القراءات.';
+const QURAN_PREFIX_RE = /^\s*(?:(?:و?قال|يقول)\s+(?:الله|ربنا|الحق)?\s*(?:تعالى|تبارك\s+وتعالى|عز\s+وجل|سبحانه(?:\s+وتعالى)?|جل\s+(?:وعلا|جلاله))?\s*(?:في\s+(?:كتابه|محكم\s+(?:كتابه|التنزيل))(?:\s+الكريم|\s+العزيز)?)?\s*[:：،]?\s*)?(?:أعوذ\s+بالله\s+من\s+الشيطان\s+الرجيم\s*)?(?:بسم\s+الله\s+الرحمن\s+الرحيم\s*)?/;
+function stripQuranWrap(text) {
+  let t = String(text || '');
+  let attributed = null;
+  const m = t.match(QURAN_PREFIX_RE);
+  if (m && m[0].trim()) { attributed = m[0].trim().replace(/[:：،]$/, '').trim(); t = t.slice(m[0].length); }
+  t = t.replace(/\s*صدق\s+الله\s+(?:العظيم|العلي\s+العظيم)\s*\.?\s*$/, '')
+    .replace(/[﴿﴾«»"“”()\[\]{}]/g, ' ')
+    .replace(/[\s(]*\[?\s*[^\s\]]+\s*:\s*[0-9٠-٩]+(?:\s*[-–]\s*[0-9٠-٩]+)?\s*\]?\s*$/, '') // [البقرة: 255]
+    .trim();
+  return { text: t, attributed };
+}
+
+const locText = (l) => l.cross_sura ? `${l.sura} ${l.from} وما بعدها` : (l.from === l.to ? `${l.sura}: ${l.from}` : `${l.sura}: ${l.from}–${l.to}`);
+const joinAr = (a) => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join('، ') + ' و' + a[a.length - 1];
+
+// تجميع الروايات حسب موضع الآية (لاختلاف عدّ الآي بين الروايات)
+function groupLocations(results) {
+  const g = new Map();
+  for (const r of results) {
+    const k = locText(r.best);
+    if (!g.has(k)) g.set(k, []);
+    g.get(k).push(r.name);
+  }
+  return [...g.entries()].map(([where, names]) => ({ where, riwayat: names }));
+}
+
+function quranCard(base, rawText) {
+  const { text, attributed } = stripQuranWrap(rawText);
+  if (attributed && !base.attributed_to) base.attributed_to = attributed;
+  let m;
+  try { m = quran.match(text); }
+  catch (e) { console.error('مسار القرآن:', e.message); return { ...base, state: 'not_found', scope: QURAN_SCOPE, note: 'تعذّرت مطابقة الآية في هذه المحاولة.' }; }
+
+  if (m.kind === 'too_short') {
+    return { ...base, state: 'not_found', scope: QURAN_SCOPE,
+      note: 'النص أقصر من أن يُطابَق بآية بعينها. ألصق الآية كاملة.' };
+  }
+  if (m.kind === 'none') {
+    return { ...base, state: 'not_found', scope: QURAN_SCOPE, note: 'لم يُعثر على مرجع، يُحال إلى مختص.' };
+  }
+  if (m.kind === 'different') {
+    return { ...base, state: 'quran_different', scope: QURAN_SCOPE,
+      quran: { summary: 'لم يطابق نص المنشور أياً من الروايات المعتمدة في الأداة، وأقرب نص إليه:',
+        source: { riwaya: m.riwaya, riwaya_name: m.riwaya_name, where: locText(m.location), sura_no: m.location.sura_no, text: m.source_text },
+        diff: m.diff },
+      caution: 'تغطي الأداة ثماني روايات فقط؛ فما لم يطابقها يُراجَع مع مختص في القراءات. والفرق المعروض فرق في اللفظ عن أقرب نص، لا حكم على المنشور.' };
+  }
+
+  const byKey = Object.fromEntries(m.results.map((r) => [r.key, r]));
+  const occ = Math.max(...m.results.map((r) => r.occurrences));
+  const repeated = occ > 1 ? `ورد هذا اللفظ في ${occ} مواضع من القرآن، ويُعرض أولها.` : null;
+
+  if (m.kind === 'vocal_none') {
+    const near = byKey[m.nearest];
+    return { ...base, state: 'quran_different', scope: QURAN_SCOPE,
+      quran: { summary: 'يوافق رسمُ النص (حروفه دون تشكيل) آيةً في المصحف، لكن تشكيله لم يطابق أياً من الروايات المعتمدة في الأداة، وأقرب نص إليه:',
+        source: { riwaya: near.key, riwaya_name: near.name, where: locText(near.best), sura_no: near.best.sura_no, text: near.source_text },
+        word_diffs: near.diff_words, repeated },
+      caution: 'تغطي الأداة ثماني روايات فقط؛ فما لم يطابقها يُراجَع مع مختص في القراءات. وقد يكون الفرق من قراءة التشكيل في الصورة، فقارنه بالأصل.' };
+  }
+
+  // وُجد
+  const groups = groupLocations(m.results);
+  let summary, shown, agreeing = null, others = null;
+  if (m.imlaei_only) {
+    summary = `يوافق الآية (${locText(m.results[0].best)}) في رواية حفص عن عاصم بالرسم الإملائي. ولا يمكن تحديد الرواية دون تشكيل.`;
+    shown = m.results[0];
+  } else if (!m.vocalized) {
+    summary = 'يوافق رسم الآية في الروايات المعتمدة، ولا يمكن تحديد الرواية دون تشكيل.';
+    shown = byKey.hafs || m.results[0];
+  } else {
+    agreeing = m.agree.map((k) => byKey[k].name);
+    summary = agreeing.length === quran.ORDER.length ? 'موافق للروايات الثماني المعتمدة في الأداة.' : `موافق لرواية ${joinAr(agreeing)}.`;
+    if (!m.agree.includes('hafs')) summary += ' ويخالف رواية حفص عن عاصم، والفرق فرق روايات لا خطأ.';
+    shown = byKey[m.agree.includes('hafs') ? 'hafs' : m.agree[0]];
+    others = m.results.filter((r) => !m.agree.includes(r.key))
+      .map((r) => ({ riwaya_name: r.name, word_diffs: (r.diff_words || []).slice(0, 4) }));
+  }
+  return { ...base, state: 'quran_found', scope: QURAN_SCOPE,
+    quran: { summary, groups, agreeing, repeated,
+      missing: m.missing && m.missing.length ? m.missing : null,
+      source: { riwaya: shown.key, riwaya_name: shown.name, where: locText(shown.best), sura_no: shown.best.sura_no, text: shown.source_text },
+      others } };
+}
+
+// نص ملصق كله آية أو آيات (حروفه متصلة في المصحف): بطاقة مباشرة دون نموذج
+const QURAN_DIRECT_MIN = 15;
+function directQuran(raw) {
+  const { text } = stripQuranWrap(raw);
+  if (quran.skeletonOnly(text).length < QURAN_DIRECT_MIN) return null;
+  let m;
+  try { m = quran.match(text); } catch { return null; }
+  if (m.kind !== 'match' && m.kind !== 'vocal_none') return null;
+  return buildCard({ type: 'آية', text: raw });
 }
 
 // ---------- المطابقة المباشرة دون نموذج ----------
@@ -462,6 +561,8 @@ exports.handler = async (event) => {
   if (!body.image) {
     const direct = directMatch(body.text);
     if (direct) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع القاعدة (دون نموذج)', cards: [direct], skipped_info_claims: 0 });
+    const dq = directQuran(body.text);
+    if (dq) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع نص المصحف (دون نموذج)', cards: [dq], skipped_info_claims: 0 });
     const viaDorar = await directDorar(body.text, Math.min(deadline, Date.now() + 3000));
     if (viaDorar) return reply(200, { status: 'ok', confidence: 1, model_used: 'بحث مباشر في الموسوعة الحديثية (دون نموذج)', cards: [viaDorar], skipped_info_claims: 0 });
   }
@@ -514,4 +615,4 @@ exports.handler = async (event) => {
 };
 
 // للاختبار المحلي فقط
-exports._test = { directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };
+exports._test = { directQuran, quranCard, stripQuranWrap, directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };

@@ -4,7 +4,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["data/verdicts.json"]
+  included_files = ["data/verdicts.json", "data/quran.json.gz", "lib/**"]
 
 [[redirects]]
   from = "/api/analyze"
