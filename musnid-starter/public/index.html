@@ -173,8 +173,8 @@ $('go').addEventListener('click',async()=>{
       body:JSON.stringify(imageB64&&!text?{image:imageB64,mediaType:'image/jpeg'}:{text})});
     const d=await r.json();
     if(!r.ok){$('status').textContent=d.error||'حدث خطأ.';return}
-    if(d.status==='unreadable'){$('status').textContent=d.message;return}
-    $('status').textContent=d.cards.length?'':'لم يُعثر في المنشور على آية أو حديث أو قول منسوب للتحقق منه.';
+    if(d.status==='unreadable'||d.status==='recitation'){$('status').textContent=d.message;return}
+    $('status').textContent=d.notice||(d.cards.length?'':'لم يُعثر في المنشور على آية أو حديث أو قول منسوب للتحقق منه.');
     $('out').innerHTML=d.cards.map(card).join('');
   }catch(e){$('status').textContent='تعذّر الاتصال بالخادم. أعد المحاولة.'}
   finally{$('go').disabled=false}

@@ -526,6 +526,7 @@ async function extract({ text, image, mediaType }, hardDeadline) {
   const deadline = Math.min(Date.now() + TIME_BUDGET_MS, hardDeadline || Infinity);
   let last = 'لا نموذج متاح';
   let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503)
+  let recitation = 0; // عدد النماذج التي امتنعت عن نسخ النص (finishReason=RECITATION)
   for (let mi = 0; mi < MODELS.length; mi++) {
     const model = MODELS[mi];
     const remaining = deadline - Date.now();
@@ -542,7 +543,7 @@ async function extract({ text, image, mediaType }, hardDeadline) {
       if (res.ok) {
         // رد غير صالح من نموذج: يُجرَّب النموذج التالي بدل إيقاف الطلب
         try { return { ex: parseModelJson(await res.json()), model }; }
-        catch (e) { if (e instanceof ApiError) { console.error(e.message, model); last = `رد غير صالح من ${model}`; continue; } throw e; }
+        catch (e) { if (e instanceof ApiError) { console.error(e.message, model); if (/RECITATION/.test(e.message)) recitation++; last = `رد غير صالح من ${model}`; continue; } throw e; }
       }
       // إن رفض المزوّد المخطط (400) يُعاد الطلب نفسه دون مخطط، فلا يتعطل الموقع بسببه
       if (res.status === 400 && schemaOn) {
@@ -565,8 +566,43 @@ async function extract({ text, image, mediaType }, hardDeadline) {
       clearTimeout(timer);
     }
   }
+  // امتناع المزوّد عن نسخ نص منتشر في الإنترنت: يُعرض للمستخدم سببه الحقيقي
+  if (recitation > 0) throw new ApiError(`امتنع المزوّد عن نسخ النص (RECITATION): ${last}`, 422);
   if (busy > 0 && busy === MODELS.length) throw new ApiError(`كل النماذج مزدحمة أو بلغت حصتها: ${last}`, 503);
   throw new ApiError(`فشلت كل النماذج. آخر مشكلة: ${last}`, 504);
+}
+
+// ---------- تقسيم محلي دون نموذج ----------
+// يُقسَّم النص بالأسطر والترقيم وما بين علامات التنصيص، ويُطابَق كل مقطع مع القاعدة والمصحف.
+// لا تُعرض بطاقة لمقطع لم يطابق شيئاً (العناوين وأحكام الناشر ونحوها).
+function localSplitCards(raw) {
+  const text = String(raw || '');
+  const segs = new Map(); // النص ← حكم الناشر إن وُجد
+  const add = (s) => {
+    let t = s.replace(/^[\s\-–—•*·\d٠-٩.:،]+/, '').trim();   // ترقيم في أول السطر
+    let grade = null;
+    // «(نص الحديث) ضعيف»: ما بعد القوس الأخير حكم الناشر، لا جزء من النص
+    const m = t.match(/^(.*)[)\]»]\s*([^()\[\]«»]{1,30})$/);
+    if (m && tokens(m[2]).length <= 4) { t = m[1]; grade = m[2].trim(); }
+    t = t.replace(/^[\s(\[«"“]+|[\s)\]»"”.]+$/g, '').trim();
+    if (tokens(t).length >= 2 && !segs.has(t)) segs.set(t, grade);   // الكلمتان تُقبلان بمطابقة تامة فقط (أدناه)
+  };
+  text.split(/\n+/).forEach(add);
+  (text.match(/[«"“﴿][^«»"“”﴿﴾]{8,}[»"”﴾]/g) || []).forEach(add);
+  const cards = [], seen = new Set();
+  for (const [seg, grade] of segs) {
+    let card = null;
+    try { card = directQuran(seg); } catch { card = null; }
+    if (!card) {
+      const am = seg.match(ATTRIB_RE);
+      const t = am ? seg.slice(am[0].length) : seg;
+      const c = buildCard({ type: 'حديث', text: t, attributed_to: am ? am[1].trim() : null, publisher_grade: grade });
+      if (c && c.entry_id && (tokens(t).length >= PREFIX_MIN_TOKENS || c.score >= MATCH_EXACT)) card = c;
+    }
+    const key = card && (card.entry_id || (card.quran && card.quran.source && card.quran.source.where));
+    if (card && !seen.has(key)) { seen.add(key); cards.push(card); }
+  }
+  return cards;
 }
 
 const reply = (code, obj) => ({
@@ -633,6 +669,19 @@ exports.handler = async (event) => {
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
   } catch (err) {
     console.error(err.message);
+    // نص ملصق تعذّر على النموذج تقسيمه: تُقسّمه الأداة بنفسها وتطابق كل مقطع مع القاعدة والمصحف دون نموذج.
+    if (!body.image && err instanceof ApiError) {
+      const local = localSplitCards(body.text);
+      if (local.length) {
+        return reply(200, { status: 'ok', confidence: 1, model_used: 'تقسيم محلي دون نموذج (تعذّر النموذج)', cards: local,
+          skipped_info_claims: 0,
+          notice: 'تعذّر تقسيم المنشور بالنموذج، فقسّمته الأداة بأسطره وعلامات تنصيصه، وتُعرض المقاطع التي طابقت قاعدة الأحكام أو المصحف وحدها؛ وما لم يطابق شيئاً لا تظهر له بطاقة.' });
+      }
+    }
+    if (body.image && err instanceof ApiError && err.status === 422) {
+      return reply(200, { status: 'recitation',
+        message: 'امتنع مزوّد النموذج (Google Gemini) عن نسخ نص هذه الصورة، لأن نصها منتشر بكثرة في الإنترنت. انسخ نص المنشور والصقه في الخانة، فتقسّمه الأداة وتطابقه.' });
+    }
     // إن تعذّر النموذج والنص قصير: نعرض ما يطابقه في الموسوعة إن وُجد، مع التنبيه.
     if (!body.image && err instanceof ApiError && (err.status === 503 || err.status === 504)) {
       const fb = await directDorar(body.text, deadline + 400, false).catch(() => null);
@@ -650,4 +699,4 @@ exports.handler = async (event) => {
 };
 
 // للاختبار المحلي فقط
-exports._test = { directQuran, quranCard, stripQuranWrap, directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };
+exports._test = { localSplitCards, directQuran, quranCard, stripQuranWrap, directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };
