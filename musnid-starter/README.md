@@ -8,7 +8,7 @@
 
 ## البنية
 - `public/index.html`: الواجهة (نص أو صورة، وبطاقات التحقق).
-- `netlify/functions/analyze.js`: الاستخراج بالنموذج (Google Gemini، ثم Anthropic Claude احتياطاً إن تعذّر Gemini؛ والترتيب بالمتغير `MODEL_ORDER`) ثم المطابقة مع قاعدة الأحكام، ثم البحث في الموسوعة الحديثية لما لم يوجد.
+- `netlify/functions/analyze.js`: الاستخراج بالنموذج (Anthropic Claude Sonnet 5.5، ثم Google Gemini إن تعذّر Claude أو لم يقرأ الصورة؛ والترتيب بالمتغير `MODEL_ORDER`، وسبب الاختيار في `docs/model_comparison.md`) ثم المطابقة مع قاعدة الأحكام، ثم البحث في الموسوعة الحديثية لما لم يوجد.
 - `data/verdicts.json`: قاعدة الأحكام الموثقة (v0.6). `data/testset.json`: مجموعة الاختبار (v0.5).
 
 ## النشر على Netlify

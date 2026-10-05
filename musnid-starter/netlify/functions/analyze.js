@@ -9,7 +9,8 @@ const fs = require('fs');
 const path = require('path');
 
 // النماذج تُجرَّب بالترتيب إن فشل السابق (403/404/429/عطل). تُستبدل بالمتغير GEMINI_MODEL (مفصولة بفواصل).
-const MODELS = (process.env.GEMINI_MODEL || 'gemini-3.8-flash,gemini-3-flash-preview,gemini-3.5-flash-lite')
+// الترتيب الافتراضي يبدأ بالأسرع: في مقارنة 5 أكتوبر على صور الاختبار أجاب flash-lite في 3–11 ث، وانتهت مهلة النموذجين الآخرين في أغلب الطلبات.
+const MODELS = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3-flash-preview')
   .split(',').map((s) => s.trim()).filter(Boolean);
 const OCR_CONFIDENCE_MIN = 0.6; // حد مؤقت: يُضبط بالاختبار على مجموعة الاختبار
 const MATCH_EXACT = 0.95;
@@ -522,10 +523,13 @@ function validateEx(ex) {
 const CLAUDE_MODELS = (process.env.CLAUDE_MODEL || 'claude-sonnet-5-5')
   .split(',').map((s) => s.trim()).filter(Boolean);
 // ترتيب المزوّدين: MODEL_ORDER=gemini,claude (الافتراضي) أو claude,gemini
-const PROVIDER_ORDER = (process.env.MODEL_ORDER || 'gemini,claude')
+// الافتراضي Claude ثم Gemini، بناءً على مقارنة 5 أكتوبر على صور الاختبار الـ24 (docs/model_comparison.md)
+const PROVIDER_ORDER = (process.env.MODEL_ORDER || 'claude,gemini')
   .split(',').map((s) => s.trim().toLowerCase()).filter((p) => p === 'gemini' || p === 'claude');
 // وقت يُحجز للمزوّد التالي حتى لا يستهلك الأول المهلة كلها
-const PROVIDER_RESERVE_MS = Number(process.env.PROVIDER_RESERVE_MS) || 10000;
+// إن بدأ الترتيب بـ Gemini يُحجز لـ Claude 10 ث؛ وإن بدأ بـ Claude فلا حجز (قراءته للصور تأخذ 8–20 ث)، ويُجرَّب Gemini فيما بقي.
+const PROVIDER_RESERVE_MS = Number.isFinite(Number(process.env.PROVIDER_RESERVE_MS)) && process.env.PROVIDER_RESERVE_MS !== undefined && process.env.PROVIDER_RESERVE_MS !== ''
+  ? Number(process.env.PROVIDER_RESERVE_MS) : (PROVIDER_ORDER[0] === 'gemini' ? 10000 : 0);
 const CLAUDE_FALLBACK_STATUS = new Set([400, 401, 403, 404, 408, 413, 429, 500, 502, 503, 504, 529]);
 
 const providerAvailable = (p) => p === 'gemini' ? !!process.env.GEMINI_API_KEY : !!process.env.ANTHROPIC_API_KEY;
@@ -637,6 +641,15 @@ async function extract(input, hardDeadline) {
   let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503/529)
   let recitation = 0; // عدد النماذج التي امتنعت عن نسخ النص (finishReason=RECITATION)
   let rejected = 0; // رفض صريح للطلب (لا ازدحام ولا مهلة)
+  // رد صالح لكنه «غير مقروء» أو منخفض الثقة: يُحفظ، ويُجرَّب المزوّد التالي إن بقي وقت؛ فإن لم يأتِ أفضل منه عُرض هو.
+  let weak = null;
+  const isWeak = (ex) => ex && (ex.readable === false || typeof ex.confidence !== 'number' || ex.confidence < OCR_CONFIDENCE_MIN);
+  const accept = (ex, model, pi) => {
+    if (!isWeak(ex) || pi >= providers.length - 1 || deadline - Date.now() < 4000) return { ex, model };
+    if (!weak || (ex.confidence || 0) > (weak.ex.confidence || 0)) weak = { ex, model };
+    console.error('رد منخفض الثقة، يُجرَّب المزوّد التالي:', model, ex.confidence);
+    return null;
+  };
 
   for (let pi = 0; pi < providers.length; pi++) {
     const provider = providers[pi];
@@ -658,7 +671,7 @@ async function extract(input, hardDeadline) {
           console.error('Claude: رُفض مخطط الرد، يُعاد الطلب دونه:', r.error);
           r = await callClaude(model, input, softDeadline() - Date.now(), false);
         }
-        if (r.ok) return { ex: r.ex, model };
+        if (r.ok) { const a = accept(r.ex, model, pi); if (a) return a; break; }
         console.error('Claude:', r.error);
         last = r.error;
         if (r.status === 429 || r.status === 529 || r.status === 503) busy++;
@@ -686,7 +699,7 @@ async function extract(input, hardDeadline) {
             body });
         if (res.ok) {
           // رد غير صالح من نموذج: يُجرَّب النموذج التالي بدل إيقاف الطلب
-          try { return { ex: parseModelJson(await res.json()), model }; }
+          try { const a = accept(parseModelJson(await res.json()), model, pi); if (a) return a; break; }
           catch (e) { if (e instanceof ApiError) { console.error(e.message, model); if (/RECITATION/.test(e.message)) recitation++; last = `رد غير صالح من ${model}`; continue; } throw e; }
         }
         // إن رفض المزوّد المخطط (400) يُعاد الطلب نفسه دون مخطط، فلا يتعطل الموقع بسببه
@@ -710,6 +723,7 @@ async function extract(input, hardDeadline) {
       }
     }
   }
+  if (weak) return weak;
   // امتناع المزوّد عن نسخ نص منتشر في الإنترنت: يُعرض للمستخدم سببه الحقيقي
   if (recitation > 0) throw new ApiError(`امتنع المزوّد عن نسخ النص (RECITATION): ${last}`, 422);
   if (rejected > 0 && rejected === tried) throw new ApiError(`رفض المزوّد الطلب: ${last}`, 502);
