@@ -15,6 +15,7 @@ const MODELS = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite,gemini-3.8-fl
 const OCR_CONFIDENCE_MIN = 0.6; // حد مؤقت: يُضبط بالاختبار على مجموعة الاختبار
 const MATCH_EXACT = 0.95;
 const MATCH_CLOSE = 0.6;
+const NEAR_MIN = 0.4; // نص قريب يُذكر للمستخدم دون حكمه
 // مهلة الدوال المتزامنة في Netlify قصيرة (نحو 10 ثوانٍ في الخطة المجانية)؛ نترك هامشاً.
 const TIME_BUDGET_MS = Number(process.env.TIME_BUDGET_MS) || 8500;
 const FALLBACK_STATUS = new Set([403, 404, 429, 500, 502, 503, 504]);
@@ -67,6 +68,8 @@ const SYSTEM = `أنت وحدة استخراج نصوص فقط في أداة ت�
 - الأحكام الفقهية الواردة في المنشور «حكم فقهي».
 - قد يحمل المنشور الواحد عدة أحاديث لكل منها حكم ناشر مختلف: ضع كل حكم في ادعاء صاحبه وحده، ولا تعمّم.
 - «حكم الناشر» ينقل كما كُتب ولا يكون ادعاءً مستقلاً، وهو ادعاء من الناشر وليس حقيقة.
+- إذا نقل المنشور حكماً أو جواباً لعالم على حديث أو قول في المنشور نفسه (مثل: «ما صحة حديث كذا؟ الجواب: لا أعلم له أصلاً… — ابن باز»، أو «قال الألباني: ضعيف»)، فهذا الجواب حكمٌ منقول على ذلك النص وليس ادعاءً مستقلاً: انسخه بنصه في publisher_grade لذلك النص، وأضف قائله بين قوسين كما ورد في المنشور، وإن كان جواباً على سؤال (فتوى) فاذكر ذلك، مثل: «لا أعلم له أصلاً شرعياً… (جواب فتوى منسوب إلى ابن باز)». ولا تجعل جواب العالم «قولاً منسوباً»، ولا عبارات العناوين والتنبيه («حديث لا أصل له»، «انتبه»، «التثبت قبل النشر»).
+- «القول المنسوب» قول يُنسب إلى صحابي أو تابعي أو عالم أو حكيم ويُتداول لذاته (حكمة أو موعظة أو دعاء)، لا كلام عالم في الحكم على نص آخر.
 - إن كانت الصورة غير مقروءة أو النص مشوّهاً فاجعل readable=false وconfidence منخفضة وclaims قائمة فارغة، ولا تخمّن.
 - عبّر عن ثقتك في القراءة بصدق؛ النص الزخرفي الملتبس يعني ثقة منخفضة.`;
 
@@ -186,7 +189,10 @@ function buildCard(claim) {
   const scope = `بُحث في قاعدة الأحكام الموثقة لدى الأداة (${DB.entries.length} مدخلاً). غياب النتيجة لا يعني عدم صحة النص.`;
 
   if (!m || (m.score < MATCH_CLOSE && !m.partial)) {
-    return { ...base, state: 'not_found', scope,
+    // نصوص قريبة في القاعدة (ليست اللفظ نفسه): تُعرض ألفاظها دون أحكامها، لأن لكل لفظ حكمه
+    const near = DB.entries.map((e) => ({ id: e.id, matn: e.matn, s: dice(claim.text, e.matn) }))
+      .filter((x) => x.s >= NEAR_MIN).sort((a, b) => b.s - a.s).slice(0, 2).map(({ id, matn }) => ({ id, matn }));
+    return { ...base, state: 'not_found', scope, near_entries: near.length ? near : undefined,
       note: 'لم يُعثر على مرجع، يُحال إلى مختص.' };
   }
 
@@ -205,6 +211,8 @@ function buildCard(claim) {
     partial: !!m.partial,
     state: hasVerdicts ? (exact ? 'found_verdict' : 'found_different') : 'found_no_verdict',
     entry_id: e.id,
+    // هل قابل المراجع أحكام هذا المدخل على النسخ المطبوعة؟ (حقل review في القاعدة)
+    reviewed: !!(e.review && e.review.status === 'روجع'),
     entry_type: e.entry_type || 'حديث',
     source_text: e.matn,
     score: Math.round(m.score * 100) / 100,
@@ -335,19 +343,99 @@ function directQuran(raw) {
 // تُزال صيغة النسبة في أول النص («قال رسول الله ﷺ:» ونحوها) وعلامات الاقتباس، ثم يُطابَق الباقي.
 const ATTRIB_RE = /^\s*((?:عن\s+[^:،]{1,40}?\s+قال\s*[:：،,]?\s*)?(?:قال|يقول|وقال)\s+(?:رسول\s+الله|النبي|نبي\s+الله)\s*(?:ﷺ|صلى\s+الله\s+عليه\s+وسلم|\(ﷺ\))?)\s*[:：]?\s*/;
 const DIRECT_MAX_TOKENS = 60;
+// فصل الإسناد وصيغة النسبة عن المتن: كل ما قبل آخر «قال رسول الله ﷺ» (ونحوها) نسبةٌ تُعرض كما وردت،
+// وما بعدها هو المتن الذي يُطابَق ويُبحث عنه (مثل: «روي عن محارب بن دثار عن ابن عمر قال: قال رسول الله ﷺ: «…»»).
+// يتسامح مع التشكيل بين الحروف، ومع ﷺ بين «رسول» و«الله» كما يقع في الصور
+const DZ = (w) => w.split('').map((ch) => ch + '[ً-ْٰـ]*').join('');
+const SAYS_RE = new RegExp('(?:' + ['قال', 'يقول', 'وقال', 'فقال'].map(DZ).join('|') + ')\\s+(?:' +
+  DZ('رسول') + '\\s*(?:ﷺ\\s*)?' + DZ('الله') + '|' + DZ('النبي') + '|' + DZ('نبي') + '\\s+' + DZ('الله') + ')' +
+  '\\s*(?:ﷺ|' + DZ('صلى') + '\\s+' + DZ('الله') + '\\s+' + DZ('عليه') + '\\s+(?:' + DZ('وآله') + '\\s+)?' + DZ('وسلم') + '|\\(ﷺ\\))?\\s*[:：،,]?', 'g');
+function splitAttribution(raw) {
+  const text = String(raw || '').trim();
+  let last = null, m;
+  SAYS_RE.lastIndex = 0;
+  while ((m = SAYS_RE.exec(text))) last = m;
+  let attributed = null, matn = text;
+  if (last) {
+    const after = text.slice(last.index + last[0].length);
+    if (tokens(after).length >= 2) { attributed = text.slice(0, last.index + last[0].length).trim().replace(/[:：،,]$/, '').trim(); matn = after; }
+  } else {
+    const am = text.match(ATTRIB_RE);
+    if (am) { attributed = am[1].trim(); matn = text.slice(am[0].length); }
+  }
+  // ما بين علامتي التنصيص إن أحاطتا بالمتن
+  const q = matn.match(/^[\s:]*[«"“]([^«»"“”]+)[»"”][\s.،]*$/);
+  if (q) matn = q[1];
+  matn = matn.replace(/^[\s«"“(:]+|[\s»"”).]+$/g, '').trim();
+  return { attributed, matn: matn || text };
+}
+// ---------- المنشور المركّب: نصان مدموجان في متن واحد (مثل V020 + V056) ----------
+// يُبحث عن أطول مدخل يقع لفظه كله متتابعاً داخل المنشور، ثم يُطابَق الباقي بمدخل آخر.
+// إن طابق الجزآن مدخلين مختلفين قُسِّم المنشور إلى بطاقتين، ولكلٍّ حكمه.
+const COMPOSITE_NOTE = 'جمع المنشور نصين في متن واحد، فقُسِّم إلى بطاقتين. لكلٍّ منهما حكمه في مصادره، ولا يُنقل حكم أحدهما إلى الآخر.';
+function splitComposite(text) {
+  const raw = String(text || '').split(/\s+/).filter(Boolean);
+  const map = []; // رقم الكلمة المطبَّعة ← رقم الكلمة الأصلية
+  const T = [];
+  raw.forEach((w, ri) => tokens(w).forEach((t) => { T.push(t); map.push(ri); }));
+  if (T.length < 6) return null;
+  let best = null;
+  for (const e of DB.entries) {
+    const M = tokens(e.matn);
+    if (M.length < 3 || M.length >= T.length - 2) continue;
+    for (let i = 0; i + M.length <= T.length; i++) {
+      let ok = true;
+      for (let j = 0; j < M.length; j++) if (T[i + j] !== M[j]) { ok = false; break; }
+      if (ok) { if (!best || M.length > best.len) best = { e, i, len: M.length }; break; }
+    }
+  }
+  if (!best) return null;
+  const seg = (a, b) => (a > b ? '' : raw.slice(map[a], map[b] + 1).join(' ').replace(/^[\s،,.:؛]+|[\s،,.:؛]+$/g, ''));
+  const first = seg(best.i, best.i + best.len - 1);
+  const rest = [seg(0, best.i - 1), seg(best.i + best.len, T.length - 1)].filter((x) => tokens(x).length >= 3);
+  const parts = [{ at: best.i, text: first }];
+  for (const r of rest) {
+    const m = bestMatch(r);
+    if (!m || m.entry.id === best.e.id || !(m.score >= MATCH_CLOSE || m.partial)) return null;
+    parts.push({ at: r === rest[0] && best.i > 0 ? -1 : T.length, text: r });
+  }
+  if (parts.length < 2) return null;
+  return parts.sort((a, b) => a.at - b.at).map((p) => p.text);
+}
+
+// يبني بطاقة أو أكثر لادعاء واحد: تُفصل صيغة النسبة في أوله، ويُقسَّم المنشور المركّب.
+function buildCards(claim) {
+  if (claim.type === 'حديث' || claim.type === 'قول منسوب' || claim.type === 'حكم فقهي') {
+    const sa = splitAttribution(claim.text);
+    const text = sa.matn;
+    const attributed = claim.attributed_to || sa.attributed;
+    claim = { ...claim, text, attributed_to: attributed };
+    const m = bestMatch(text);
+    if (!(m && !m.partial && m.score >= MATCH_EXACT)) {
+      const parts = splitComposite(text);
+      if (parts) {
+        return parts.map((p) => {
+          const c = buildCard({ ...claim, text: p, type: claim.type === 'حكم فقهي' ? 'حديث' : claim.type });
+          if (c) c.composite_note = COMPOSITE_NOTE;
+          return c;
+        }).filter(Boolean);
+      }
+    }
+  }
+  const c = buildCard(claim);
+  return c ? [c] : [];
+}
+
 function directMatch(raw) {
-  let text = String(raw || '').trim();
-  let attributed = null;
-  const am = text.match(ATTRIB_RE);
-  if (am) { attributed = am[1].trim(); text = text.slice(am[0].length); }
-  text = text.replace(/^[\s«"“(]+|[\s»"”).]+$/g, '').trim();
+  const { attributed, matn: text } = splitAttribution(raw);
   const n = tokens(text).length;
   if (!n || n > DIRECT_MAX_TOKENS) return null;
   const m = bestMatch(text);
-  if (!m || !(m.partial || m.score >= MATCH_EXACT)) return null;
-  const type = m.entry.entry_type || 'حديث';
-  const card = buildCard({ type, text, attributed_to: attributed });
-  return card && card.entry_id ? card : null;
+  let cards;
+  if (m && (m.partial || m.score >= MATCH_EXACT)) cards = buildCards({ type: m.entry.entry_type || 'حديث', text, attributed_to: attributed });
+  else if (splitComposite(text)) cards = buildCards({ type: 'حديث', text, attributed_to: attributed });
+  else return null;
+  return cards.length && cards.every((c) => c.entry_id) ? cards : null;
 }
 
 // ---------- الطبقة الثانية: الموسوعة الحديثية (الدرر السنية) ----------
@@ -447,7 +535,7 @@ async function enrichWithDorar(cards, deadline) {
       c.scope += ` وتعذّر البحث في الموسوعة الحديثية بالدرر في هذه المحاولة (${r.error}).`;
       c.dorar_link = link;
       c.dorar_failed = true;
-      c.note = 'تعذّر الاتصال بالموسوعة الحديثية (الدرر) الآن، وليس معنى هذا أن الحديث لا مرجع له. افتح رابط البحث أدناه، أو أعد المحاولة بعد قليل.';
+      c.note = `تعذّر الاتصال بالموسوعة الحديثية (الدرر) الآن، وليس معنى هذا أن ${c.type === 'حديث' ? 'الحديث' : 'النص'} لا مرجع له. افتح رابط البحث أدناه، أو أعد المحاولة بعد قليل.`;
       return;
     }
     const hits = dorarMatches(c.post_text, r.results);
@@ -468,11 +556,7 @@ async function enrichWithDorar(cards, deadline) {
 // فهو حديث واحد، فتُعرض بطاقته دون استدعاء النموذج (توفيراً لحصة النموذج المحدودة).
 async function directDorar(raw, deadline, requireWhole = true) {
   if (!DORAR_ENABLED) return null;
-  let text = String(raw || '').trim();
-  let attributed = null;
-  const am = text.match(ATTRIB_RE);
-  if (am) { attributed = am[1].trim(); text = text.slice(am[0].length); }
-  text = text.replace(/^[\s«"“(]+|[\s»"”).]+$/g, '').trim();
+  const { attributed, matn: text } = splitAttribution(raw);
   const n = tokens(text).length;
   if (n < PREFIX_MIN_TOKENS || n > DIRECT_MAX_TOKENS) return null;
   const card = buildCard({ type: 'حديث', text, attributed_to: attributed });
@@ -792,7 +876,7 @@ exports.handler = async (event) => {
 
   if (!body.image && !only) {
     const direct = directMatch(body.text);
-    if (direct) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع القاعدة (دون نموذج)', cards: [direct], skipped_info_claims: 0 });
+    if (direct) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع القاعدة (دون نموذج)', cards: direct, skipped_info_claims: 0 });
     const dq = directQuran(body.text);
     if (dq) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع نص المصحف (دون نموذج)', cards: [dq], skipped_info_claims: 0 });
     const viaDorar = await directDorar(body.text, Math.min(deadline, Date.now() + 3000));
@@ -827,7 +911,7 @@ exports.handler = async (event) => {
     });
 
     const seen = new Set();
-    const cards = ex.claims.map((c) => buildCard({ ...c, from_image: !!body.image })).filter(Boolean)
+    const cards = ex.claims.flatMap((c) => buildCards({ ...c, from_image: !!body.image }))
       .filter((c) => { const k = c.type + '|' + norm(c.post_text); if (seen.has(k)) return false; seen.add(k); return true; });
     await enrichWithDorar(cards, deadline);
     return reply(200, { status: 'ok', confidence: ex.confidence, model_used: model, elapsed_ms: Date.now() - t0, cards,
@@ -865,4 +949,4 @@ exports.handler = async (event) => {
 };
 
 // للاختبار المحلي فقط
-exports._test = { localSplitCards, directQuran, quranCard, stripQuranWrap, directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };
+exports._test = { buildCards, splitComposite, localSplitCards, directQuran, quranCard, stripQuranWrap, directDorar, norm, dice, bestMatch, buildCard, validateEx, directMatch, DB, parseDorar, dorarMatches, dorarQuery, enrichWithDorar };

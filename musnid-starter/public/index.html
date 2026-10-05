@@ -34,7 +34,7 @@ a{color:var(--violet)}
 .challenge{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:#C9CEF0;border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:3px 14px;margin-bottom:22px}
 .challenge i{width:7px;height:7px;background:var(--teal);display:inline-block}
 .brand{display:flex;align-items:center;gap:18px}
-.brand svg{flex:none;width:76px;height:76px}
+.brand svg{flex:none;width:86px;height:86px}
 .brand h1{margin:0;font-weight:700;font-size:2.6rem;line-height:1.2;letter-spacing:0}
 .brand h1 span{font-weight:300;color:var(--teal)}
 .tagline{margin:6px 0 0;font-size:1.12rem;color:#DDE1FA;font-weight:300}
@@ -121,10 +121,11 @@ button:disabled{opacity:.55;cursor:wait}
 .src b{display:block;font:600 .8rem 'Readex Pro',sans-serif;color:var(--violet)}
 .v{margin:8px 0;padding-inline-start:12px;border-inline-start:2px solid var(--line);font-size:.95rem}
 .v small{display:block;color:var(--mute)}
-.v .unc{color:var(--warn)}
+.v .unc,.meta .unc{color:var(--warn)}
 .meta{font-size:.85rem;color:var(--mute);margin-top:8px}
 .caution{font-size:.92rem;color:var(--warn);margin-top:8px}
 .diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.report{text-align:left;margin-top:10px}.report a{color:var(--mute);font-size:.82rem}
 .alt{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--mute)}
 .alt q{display:block;margin-top:4px;font-family:'Amiri',serif;font-size:1.05rem;quotes:'«' '»'}
 /* خطوط مجمع الملك فهد لكل رواية (مستضافة في public/fonts، وتُحمَّل عند الحاجة فقط) */
@@ -161,6 +162,9 @@ footer .in{max-width:880px;margin:0 auto;padding:24px 20px 30px}
 footer p{margin:0 0 10px;max-width:46em}
 footer a{color:var(--teal)}
 footer .fine{color:#8E99CC;font-size:.8rem}
+footer .srcs{margin:0 0 12px;padding-inline-start:20px;max-width:46em}
+footer .srcs li{margin-bottom:6px}
+footer b{color:#DDE1FA;font-weight:600}
 </style>
 </head>
 <body>
@@ -168,8 +172,8 @@ footer .fine{color:#8E99CC;font-size:.8rem}
   <div class="hero-in">
     <div class="challenge"><i aria-hidden="true"></i>مشاركة في «تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي» · المسار 04</div>
     <div class="brand">
-      <!-- الشعار: وردة هندسية ثمانية متماثلة (هوية إسلامية) قاعدتها دائرة فيها علامة تحقق -->
-      <svg viewBox="-34 -34 68 68" role="img" aria-label="شعار مُسنِد AI"><g fill="none" stroke-linejoin="round"><g stroke="#6150EA" stroke-width="2.2"><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(0)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(45)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(90)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(135)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(180)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(225)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(270)"/><path d="M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z" transform="rotate(315)"/></g><circle r="12" stroke="#2EF2C2" stroke-width="2.2"/></g><path d="M-6 .5l4 4 8.5-9" fill="none" stroke="#2EF2C2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <!-- الشعار: وردة هندسية ثمانية متماثلة (الأصالة الإسلامية) تصل بين بتلاتها خطوط وعُقد كشبكة البيانات (الحل الرقمي)، وفي قاعدتها علامة التحقق -->
+      <svg viewBox="-36 -36 72 72" role="img" aria-label="شعار مُسنِد AI"><g fill="none" stroke-linejoin="round"><g stroke="#6150EA" stroke-width="2.3"><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(0)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(45)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(90)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(135)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(180)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(225)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(270)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(315)"/></g><g stroke="#2EF2C2" stroke-opacity=".75" stroke-width="1.3" stroke-linecap="round"><path d="M3.94 -17.05Q11.48 -27.72 9.27 -14.84"/><path d="M14.84 -9.27Q27.72 -11.48 17.05 -3.94"/><path d="M17.05 3.94Q27.72 11.48 14.84 9.27"/><path d="M9.27 14.84Q11.48 27.72 3.94 17.05"/><path d="M-3.94 17.05Q-11.48 27.72 -9.27 14.84"/><path d="M-14.84 9.27Q-27.72 11.48 -17.05 3.94"/><path d="M-17.05 -3.94Q-27.72 -11.48 -14.84 -9.27"/><path d="M-9.27 -14.84Q-11.48 -27.72 -3.94 -17.05"/></g><circle r="12" stroke="#2EF2C2" stroke-width="2.3"/></g><g fill="#2EF2C2"><circle cx="9.11" cy="-21.99" r="1.7"/><circle cx="21.99" cy="-9.11" r="1.7"/><circle cx="21.99" cy="9.11" r="1.7"/><circle cx="9.11" cy="21.99" r="1.7"/><circle cx="-9.11" cy="21.99" r="1.7"/><circle cx="-21.99" cy="9.11" r="1.7"/><circle cx="-21.99" cy="-9.11" r="1.7"/><circle cx="-9.11" cy="-21.99" r="1.7"/></g><path d="M-6 .5l4 4 8.5-9" fill="none" stroke="#2EF2C2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <div>
         <h1>مُسنِد <span dir="ltr" lang="en">AI</span></h1>
         <p class="tagline">حل رقمي متكامل وموثوق لخدمة المحتوى الإسلامي</p>
@@ -233,7 +237,14 @@ footer .fine{color:#8E99CC;font-size:.8rem}
 <footer>
   <div class="in">
     <p class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي لقراءته (Anthropic Claude، وGoogle Gemini إن تعذّر الأول)، ويخضع لشروط المزوّد. وما لم يوجد في قاعدة الأداة يُبحث عن نصه في الموسوعة الحديثية بموقع الدرر السنية.</p>
-    <p>المصادر: نص القرآن بثماني روايات من الموسوعة القرآنية (Quranpedia) وخطوط مجمع الملك فهد لطباعة المصحف الشريف؛ وقاعدة أحكام موثقة من كتب أهل العلم في المكتبة الشاملة، روجعت على النسخ المطبوعة.</p>
+    <p><b>من أين تأتي النتائج:</b></p>
+    <ul class="srcs">
+      <li><b>القرآن الكريم:</b> ثماني روايات من الموسوعة القرآنية (Quranpedia)، وتُعرض بخطوط مجمع الملك فهد لطباعة المصحف الشريف.</li>
+      <li><b>قاعدة أحكام الأداة:</b> عدد محدود من الأحاديث والأقوال المتداولة (59 مدخلاً)، نُقلت أحكامها بنصها منسوبة إلى قائليها من كتب أهل العلم عبر المكتبة الشاملة. قوبل 33 مدخلاً منها على النسخ المطبوعة، والباقي لم يُراجَع بعد، وتذكر البطاقة ذلك.</li>
+      <li><b>الموسوعة الحديثية في موقع الدرر السنية (dorar.net):</b> ما لم يوجد في القاعدة يُبحث عنه فيها مباشرة، وتُنقل «خلاصة حكم المحدث» كما هي في الموسوعة، دون مراجعة مصادرها الأصلية.</li>
+    </ul>
+    <p>تعرض البطاقة ما وُجد في هذه المصادر وحدها، فلا يعني ظهور حكم أنه كل ما قيل في الحديث، ولا يعني غياب النتيجة أن النص لا أصل له.</p>
+    <p>للتواصل، أو للإبلاغ عن خطأ في بطاقة أو حكم: <a href="mailto:mosnidai01@gmail.com">mosnidai01@gmail.com</a>. تُراجَع البلاغات وتُصحَّح القاعدة بناءً عليها.</p>
     <p class="fine">مُسنِد AI مشاركة فردية في «تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي» 2026. <a href="https://github.com/mosnidai01-collab/hadith-analyzer" target="_blank" rel="noopener">الشيفرة المصدرية على GitHub</a></p>
   </div>
 </footer>
@@ -346,8 +357,9 @@ function card(c){
   let h=`<article class="card k-${cls.slice(2)}"><div class="head"><span>${esc(c.type)}</span><span class="badge ${cls}">${label}</span></div>`;
   h+=`<p class="post">${esc(c.post_text)}</p>`;
   if(c.reading_warning) h+=`<div class="caution">${esc(c.reading_warning)}</div>`;
+  if(c.composite_note) h+=`<div class="caution">${esc(c.composite_note)}</div>`;
   if(c.attributed_to) h+=`<div class="meta">النسبة كما وردت في المنشور: ${esc(c.attributed_to)}</div>`;
-  if(c.publisher_grade) h+=`<div class="meta">حكم الناشر: ${esc(c.publisher_grade)}</div>`;
+  if(c.publisher_grade) h+=`<div class="meta">الحكم كما ورد في المنشور: ${esc(c.publisher_grade)}</div>`;
   if(c.cited_reference) h+=`<div class="meta">المرجع الذي ذكره المنشور: ${esc(c.cited_reference)} (لم يُتحقق منه في هذه النسخة)</div>`;
   if(c.quran) h+=quranBlock(c.quran);
   if(c.source_text){
@@ -357,6 +369,7 @@ function card(c){
     } else h+=`<div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div>`;
   }
   if((c.verdicts||[]).length) h+=`<div class="meta"><b>الأحكام المنقولة على نص المصدر أعلاه:</b></div>`;
+  if(c.entry_id&&c.reviewed===false) h+=`<div class="meta"><span class="unc">لم يقابل مراجع الأداة أحكام هذا المدخل على النسخ المطبوعة بعد.</span></div>`;
   (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}${v.unconfirmed?' <span class="unc">· لم تُراجَع الصفحة الأصلية بعد</span>':''}</small></div>`});
   (c.takhrij_no_verdict||[]).forEach(t=>{h+=`<div class="v">تخريج دون حكم: ${esc(t.takhrij_only)}<small>${esc(t.book)}، ${esc(t.location)}</small></div>`});
   if((c.dorar||[]).length){
@@ -368,7 +381,11 @@ function card(c){
   if(c.caution) h+=`<div class="caution">${esc(c.caution)}</div>`;
   if(c.scope) h+=`<div class="meta">نطاق البحث: ${esc(c.scope)}</div>`;
   if(c.dorar_link) h+=`<div class="meta"><a href="${esc(c.dorar_link)}" target="_blank" rel="noopener">افتح نتائج البحث في موقع الدرر السنية</a></div>`;
+  if((c.near_entries||[]).length){h+=`<div class="alt">في القاعدة نص قريب من هذا اللفظ وليس هو، وله حكم مستقل لا يُعرض هنا ولا ينطبق على لفظ المنشور. ألصقه وحده لترى بطاقته:`;c.near_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
   if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. ألصق اللفظ وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
+  const subj=encodeURIComponent('مُسنِد AI: بلاغ عن بطاقة'+(c.entry_id?' '+c.entry_id:''));
+  const body=encodeURIComponent('نص المنشور: '+(c.post_text||'')+'\nالحالة: '+label+(c.entry_id?'\nالمدخل: '+c.entry_id:'')+'\n\nملاحظتي:\n');
+  h+=`<div class="meta report"><a href="mailto:mosnidai01@gmail.com?subject=${subj}&body=${body}">أبلغ عن خطأ في هذه البطاقة</a></div>`;
   return h+'</article>';
 }
 
