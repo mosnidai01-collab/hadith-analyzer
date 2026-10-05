@@ -382,22 +382,38 @@ function parseDorar(html) {
   return out;
 }
 
-async function dorarSearch(text, timeoutMs) {
-  const q = dorarQuery(text);
-  if (!q || timeoutMs < 800) return { error: 'time' };
+const dorarCache = new Map(); // ذاكرة مؤقتة داخل الدالة الواحدة فقط (لا تُخزَّن النصوص بين الجلسات)
+async function dorarOnce(q, timeoutMs) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${DORAR_API}?skey=${encodeURIComponent(q)}`, {
-      signal: ctrl.signal, headers: { 'user-agent': 'musnid-ai (hackathon; contact via GitHub)' } });
+      signal: ctrl.signal,
+      headers: { 'accept': 'application/json', 'accept-language': 'ar', 'user-agent': 'Mozilla/5.0 (compatible; musnid-ai hackathon)' } });
     if (!res.ok) return { error: `http ${res.status}` };
-    const data = await res.json();
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); } catch { return { error: 'غير JSON: ' + raw.slice(0, 60).replace(/\s+/g, ' ') }; }
     return { q, results: parseDorar(data && data.ahadith && data.ahadith.result) };
   } catch (e) {
-    return { error: e.name === 'AbortError' ? 'time' : 'net' };
+    return { error: e.name === 'AbortError' ? 'time' : 'net: ' + (e.cause && e.cause.code || e.message) };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function dorarSearch(text, timeoutMs, deadline) {
+  const q = dorarQuery(text);
+  if (!q || timeoutMs < 800) return { error: 'time' };
+  if (dorarCache.has(q)) return dorarCache.get(q);
+  let r = await dorarOnce(q, timeoutMs);
+  // محاولة ثانية بعد مهلة قصيرة إن بقي وقت (ازدحام عارض أو تحديد معدل الطلبات)
+  if (r.error && r.error !== 'time' && deadline && deadline - Date.now() > 1800) {
+    await new Promise((ok) => setTimeout(ok, 600));
+    r = await dorarOnce(q, Math.min(4000, deadline - Date.now()));
+  }
+  if (!r.error) dorarCache.set(q, r);
+  return r;
 }
 
 // يُبقي من نتائج الموسوعة ما يطابق نص الادعاء فعلاً (لا كل ما يحوي كلماته متفرقة)،
@@ -422,10 +438,10 @@ async function enrichWithDorar(cards, deadline) {
   if (!DORAR_ENABLED) return;
   const todo = cards.filter((c) => c && c.state === 'not_found' && DORAR_TYPES.has(c.type));
   await Promise.all(todo.map(async (c) => {
-    const r = await dorarSearch(c.post_text, Math.min(4000, deadline - Date.now()));
+    const r = await dorarSearch(c.post_text, Math.min(4000, deadline - Date.now()), deadline);
     const link = `https://dorar.net/hadith/search?q=${encodeURIComponent(dorarQuery(c.post_text))}`;
     if (r.error) {
-      c.scope += ' وتعذّر البحث في الموسوعة الحديثية بالدرر في هذه المحاولة.';
+      c.scope += ` وتعذّر البحث في الموسوعة الحديثية بالدرر في هذه المحاولة (${r.error}).`;
       c.dorar_link = link;
       return;
     }
