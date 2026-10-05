@@ -279,7 +279,9 @@ function quranCard(base, rawText, fromImage = false) {
   const occ = Math.max(...m.results.map((r) => r.occurrences));
   const repeated = occ > 1 ? `ورد هذا اللفظ في ${occ} مواضع من القرآن، ويُعرض أولها.` : null;
 
-  if (fromImage && (m.kind === 'vocal_none' || m.vocalized)) { m.kind = 'match'; m.vocalized = false; }
+  // التنبيه الخاص بالصورة يُقصر على الآية المشكولة؛ غير المشكولة تأخذ عبارة «دون تشكيل» المعتادة
+  const imageVocal = fromImage && (m.kind === 'vocal_none' || m.vocalized);
+  if (imageVocal) { m.kind = 'match'; m.vocalized = false; }
 
   if (m.kind === 'vocal_none') {
     const near = byKey[m.nearest];
@@ -296,7 +298,7 @@ function quranCard(base, rawText, fromImage = false) {
   if (m.imlaei_only) {
     summary = `يوافق الآية (${locText(m.results[0].best)}) في رواية حفص عن عاصم بالرسم الإملائي. ولا يمكن تحديد الرواية دون تشكيل.`;
     shown = m.results[0];
-  } else if (!m.vocalized && fromImage) {
+  } else if (!m.vocalized && imageVocal) {
     summary = 'يوافق رسم الآية في الروايات المعتمدة. ولا تُحدَّد الرواية من الصورة، لأن قراءة التشكيل من الصور غير مضمونة؛ لتحديدها الصق نص الآية مشكولاً كما في المنشور.';
     shown = byKey.hafs || m.results[0];
   } else if (!m.vocalized) {
@@ -480,7 +482,7 @@ async function directDorar(raw, deadline, requireWhole = true) {
   return card;
 }
 
-// ---------- الاستدعاء (Gemini) ----------
+// ---------- الاستدعاء (Gemini، ثم Claude احتياطاً، أو بالترتيب في MODEL_ORDER) ----------
 class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
@@ -515,7 +517,89 @@ function validateEx(ex) {
   return p;
 }
 
-async function extract({ text, image, mediaType }, hardDeadline) {
+// ---------- Claude (Anthropic): مزوّد ثانٍ بالتعليمات نفسها ومخطط الرد نفسه ----------
+// يُفعَّل بوجود ANTHROPIC_API_KEY، ويُتخطّى دونه. النماذج بالمتغير CLAUDE_MODEL (مفصولة بفواصل).
+const CLAUDE_MODELS = (process.env.CLAUDE_MODEL || 'claude-sonnet-5-5')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+// ترتيب المزوّدين: MODEL_ORDER=gemini,claude (الافتراضي) أو claude,gemini
+const PROVIDER_ORDER = (process.env.MODEL_ORDER || 'gemini,claude')
+  .split(',').map((s) => s.trim().toLowerCase()).filter((p) => p === 'gemini' || p === 'claude');
+// وقت يُحجز للمزوّد التالي حتى لا يستهلك الأول المهلة كلها
+const PROVIDER_RESERVE_MS = Number(process.env.PROVIDER_RESERVE_MS) || 10000;
+const CLAUDE_FALLBACK_STATUS = new Set([400, 401, 403, 404, 408, 413, 429, 500, 502, 503, 504, 529]);
+
+const providerAvailable = (p) => p === 'gemini' ? !!process.env.GEMINI_API_KEY : !!process.env.ANTHROPIC_API_KEY;
+
+function parseClaudeJson(data) {
+  const blocks = data.content || [];
+  const tool = blocks.find((b) => b.type === 'tool_use' && b.name === 'record_extraction');
+  const why = `[stop=${data.stop_reason || '?'} usage=${JSON.stringify(data.usage || {})}]`;
+  if (data.stop_reason === 'refusal') throw new ApiError(`امتنع النموذج عن الطلب ${why}`, 502);
+  if (data.stop_reason === 'max_tokens') throw new ApiError(`رد النموذج مقطوع ${why}`, 502);
+  if (!tool || !tool.input || typeof tool.input !== 'object') throw new ApiError(`رد المزوّد ليس JSON صالحاً ${why}`, 502);
+  return tool.input;
+}
+
+const CLAUDE_TOOL = {
+  name: 'record_extraction',
+  description: 'سجّل نتيجة قراءة المنشور وتقسيمه إلى ادعاءات وفق التعليمات.',
+  input_schema: {
+    type: 'object',
+    required: ['readable', 'confidence', 'full_text', 'claims'],
+    properties: {
+      readable: { type: 'boolean' },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+      full_text: { type: 'string' },
+      claims: { type: 'array', items: { type: 'object', required: ['type', 'text', 'uncertain'],
+        properties: {
+          type: { type: 'string', enum: [...ALLOWED_TYPES] },
+          text: { type: 'string' },
+          uncertain: { type: 'boolean' },
+          publisher_grade: { type: ['string', 'null'] },
+          cited_reference: { type: ['string', 'null'] },
+          attributed_to: { type: ['string', 'null'] },
+        } } },
+    },
+  },
+};
+
+// محاولة واحدة لنموذج Claude؛ تعيد { ok, ex } أو { status, error }
+async function callClaude(model, { text, image, mediaType }, timeoutMs) {
+  const content = [];
+  if (image) content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } });
+  content.push({ type: 'text', text: image
+    ? 'اقرأ هذا المنشور واستخرج الادعاءات وفق التعليمات، وسجّلها بالأداة record_extraction.'
+    : `استخرج ادعاءات هذا المنشور وفق التعليمات، وسجّلها بالأداة record_extraction:\n\n${text}` });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model, max_tokens: Number(process.env.CLAUDE_MAX_TOKENS) || 16000,
+        system: SYSTEM,
+        tools: [CLAUDE_TOOL],
+        tool_choice: { type: 'tool', name: 'record_extraction' },
+        messages: [{ role: 'user', content }],
+      }) });
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = (j.error && j.error.type) || ''; } catch { /* لا شيء */ }
+      return { status: res.status, error: `${res.status}${detail ? ' ' + detail : ''} من ${model}` };
+    }
+    try { return { ok: true, ex: parseClaudeJson(await res.json()) }; }
+    catch (e) { if (e instanceof ApiError) { console.error(e.message, model); return { status: 0, error: `رد غير صالح من ${model}` }; } throw e; }
+  } catch (err) {
+    return { status: -1, abort: err.name === 'AbortError', error: `تعذّر الاتصال أو انتهت المهلة (${model})` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function extract(input, hardDeadline) {
+  const { text, image, mediaType } = input;
   const parts = [];
   if (image) parts.push({ inline_data: { mime_type: mediaType, data: image } });
   parts.push({ text: image
@@ -542,51 +626,85 @@ async function extract({ text, image, mediaType }, hardDeadline) {
   let schemaOn = true;
 
   const deadline = Math.min(Date.now() + TIME_BUDGET_MS, hardDeadline || Infinity);
+  // input.only: مزوّد واحد بعينه لاختبار المقارنة (يُسمح به برمز TEST_TOKEN فقط، انظر handler)
+  const providers = (input.only ? [input.only] : PROVIDER_ORDER).filter(providerAvailable);
   let last = 'لا نموذج متاح';
-  let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503)
+  let tried = 0; // عدد النماذج التي جُرّبت فعلاً
+  let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503/529)
   let recitation = 0; // عدد النماذج التي امتنعت عن نسخ النص (finishReason=RECITATION)
-  for (let mi = 0; mi < MODELS.length; mi++) {
-    const model = MODELS[mi];
-    const remaining = deadline - Date.now();
-    if (remaining < 1500) { last = 'انتهت المهلة'; break; }
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), remaining);
-    try {
-      // المفتاح في الترويسة لا في الرابط، فلا يظهر في أي رسالة خطأ
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        { method: 'POST', signal: ctrl.signal,
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
-          body });
-      if (res.ok) {
-        // رد غير صالح من نموذج: يُجرَّب النموذج التالي بدل إيقاف الطلب
-        try { return { ex: parseModelJson(await res.json()), model }; }
-        catch (e) { if (e instanceof ApiError) { console.error(e.message, model); if (/RECITATION/.test(e.message)) recitation++; last = `رد غير صالح من ${model}`; continue; } throw e; }
+  let rejected = 0; // رفض صريح للطلب (لا ازدحام ولا مهلة)
+
+  for (let pi = 0; pi < providers.length; pi++) {
+    const provider = providers[pi];
+    // إن بقي مزوّد بعده يُحجز له وقت، ما لم يكن الباقي أقل من أن يُقسم
+    const laterExists = pi < providers.length - 1;
+    const softDeadline = () => {
+      const remaining = deadline - Date.now();
+      return laterExists && remaining > PROVIDER_RESERVE_MS + 4000 ? deadline - PROVIDER_RESERVE_MS : deadline;
+    };
+
+    if (provider === 'claude') {
+      for (const model of CLAUDE_MODELS) {
+        const remaining = softDeadline() - Date.now();
+        if (remaining < 1500) { last = 'انتهت المهلة'; break; }
+        tried++;
+        const r = await callClaude(model, input, remaining);
+        if (r.ok) return { ex: r.ex, model };
+        console.error('Claude:', r.error);
+        last = r.error;
+        if (r.status === 429 || r.status === 529 || r.status === 503) busy++;
+        if (r.abort) break;
+        if (r.status > 0 && ![429, 500, 502, 503, 504, 529].includes(r.status)) rejected++;
+        if (r.status > 0 && !CLAUDE_FALLBACK_STATUS.has(r.status)) break;
       }
-      // إن رفض المزوّد المخطط (400) يُعاد الطلب نفسه دون مخطط، فلا يتعطل الموقع بسببه
-      if (res.status === 400 && schemaOn) {
-        console.error('رُفض مخطط الرد، يُعاد الطلب دونه', model);
-        schemaOn = false;
-        const { responseSchema, ...rest } = gen;
-        body = makeBody(rest);
-        mi--; continue;
-      }
-      if (FALLBACK_STATUS.has(res.status)) {
+      continue;
+    }
+
+    // Gemini
+    for (let mi = 0; mi < MODELS.length; mi++) {
+      const model = MODELS[mi];
+      const remaining = softDeadline() - Date.now();
+      if (remaining < 1500) { last = 'انتهت المهلة'; break; }
+      tried++;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), remaining);
+      try {
+        // المفتاح في الترويسة لا في الرابط، فلا يظهر في أي رسالة خطأ
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          { method: 'POST', signal: ctrl.signal,
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+            body });
+        if (res.ok) {
+          // رد غير صالح من نموذج: يُجرَّب النموذج التالي بدل إيقاف الطلب
+          try { return { ex: parseModelJson(await res.json()), model }; }
+          catch (e) { if (e instanceof ApiError) { console.error(e.message, model); if (/RECITATION/.test(e.message)) recitation++; last = `رد غير صالح من ${model}`; continue; } throw e; }
+        }
+        // إن رفض المزوّد المخطط (400) يُعاد الطلب نفسه دون مخطط، فلا يتعطل الموقع بسببه
+        if (res.status === 400 && schemaOn) {
+          console.error('رُفض مخطط الرد، يُعاد الطلب دونه', model);
+          schemaOn = false;
+          const { responseSchema, ...rest } = gen;
+          body = makeBody(rest);
+          tried--; mi--; continue;
+        }
         if (res.status === 429 || res.status === 503) busy++;
-        last = `${res.status} من ${model}`; continue;
+        last = `${res.status} من ${model}`;
+        // أي رفض آخر من Gemini: يُترك للنموذج التالي أو للمزوّد التالي بدل إيقاف الطلب
+        if (!FALLBACK_STATUS.has(res.status)) { console.error('Gemini:', last); rejected++; break; }
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+        last = `تعذّر الاتصال أو انتهت المهلة (${model})`;
+        if (err.name === 'AbortError') break;
+      } finally {
+        clearTimeout(timer);
       }
-      throw new ApiError(`رفض المزوّد الطلب (${res.status})`, 502);
-    } catch (err) {
-      if (err instanceof ApiError) throw err;
-      last = `تعذّر الاتصال أو انتهت المهلة (${model})`;
-      if (err.name === 'AbortError') break;
-    } finally {
-      clearTimeout(timer);
     }
   }
   // امتناع المزوّد عن نسخ نص منتشر في الإنترنت: يُعرض للمستخدم سببه الحقيقي
   if (recitation > 0) throw new ApiError(`امتنع المزوّد عن نسخ النص (RECITATION): ${last}`, 422);
-  if (busy > 0 && busy === MODELS.length) throw new ApiError(`كل النماذج مزدحمة أو بلغت حصتها: ${last}`, 503);
+  if (rejected > 0 && rejected === tried) throw new ApiError(`رفض المزوّد الطلب: ${last}`, 502);
+  if (busy > 0 && busy === tried) throw new ApiError(`كل النماذج مزدحمة أو بلغت حصتها: ${last}`, 503);
   throw new ApiError(`فشلت كل النماذج. آخر مشكلة: ${last}`, 504);
 }
 
@@ -633,7 +751,7 @@ exports.handler = async (event) => {
   const t0 = Date.now();
   const deadline = t0 + TOTAL_BUDGET_MS;
   if (event.httpMethod !== 'POST') return reply(405, { error: 'الطريقة غير مدعومة' });
-  if (!process.env.GEMINI_API_KEY) return reply(500, { error: 'مفتاح GEMINI_API_KEY غير مضبوط في متغيرات البيئة' });
+  if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) return reply(500, { error: 'لا مفتاح لمزوّد النموذج (GEMINI_API_KEY أو ANTHROPIC_API_KEY) في متغيرات البيئة' });
 
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return reply(400, { error: 'طلب غير صالح' }); }
@@ -645,7 +763,11 @@ exports.handler = async (event) => {
   }
 
   // نص ملصق يطابق مدخلاً في القاعدة مطابقة تامة أو يُحتوى فيه حرفياً: بطاقة مباشرة دون استدعاء النموذج.
-  if (!body.image) {
+  // اختبار المقارنة بين المزوّدين: يُفرض مزوّد واحد، وتُتخطّى المطابقة المباشرة، إن طابق الرمز متغير TEST_TOKEN في Netlify
+  const only = process.env.TEST_TOKEN && body.test_token === process.env.TEST_TOKEN &&
+    (body.provider === 'gemini' || body.provider === 'claude') ? body.provider : null;
+
+  if (!body.image && !only) {
     const direct = directMatch(body.text);
     if (direct) return reply(200, { status: 'ok', confidence: 1, model_used: 'مطابقة مباشرة مع القاعدة (دون نموذج)', cards: [direct], skipped_info_claims: 0 });
     const dq = directQuran(body.text);
@@ -656,7 +778,7 @@ exports.handler = async (event) => {
 
   try {
     // الصورة تُعالج في الذاكرة ولا تُخزَّن عندنا.
-    const { ex, model } = await extract(body, deadline);
+    const { ex, model } = await extract({ ...body, only }, deadline);
 
     const problems = validateEx(ex);
     if (problems.length) {
@@ -685,7 +807,7 @@ exports.handler = async (event) => {
     const cards = ex.claims.map((c) => buildCard({ ...c, from_image: !!body.image })).filter(Boolean)
       .filter((c) => { const k = c.type + '|' + norm(c.post_text); if (seen.has(k)) return false; seen.add(k); return true; });
     await enrichWithDorar(cards, deadline);
-    return reply(200, { status: 'ok', confidence: ex.confidence, model_used: model, cards,
+    return reply(200, { status: 'ok', confidence: ex.confidence, model_used: model, elapsed_ms: Date.now() - t0, cards,
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
   } catch (err) {
     console.error(err.message);
@@ -700,7 +822,7 @@ exports.handler = async (event) => {
     }
     if (body.image && err instanceof ApiError && err.status === 422) {
       return reply(200, { status: 'recitation',
-        message: 'امتنع مزوّد النموذج (Google Gemini) عن نسخ نص هذه الصورة، لأن نصها منتشر بكثرة في الإنترنت. انسخ نص المنشور والصقه في الخانة، فتقسّمه الأداة وتطابقه.' });
+        message: 'امتنع مزوّد النموذج عن نسخ نص هذه الصورة، لأن نصها منتشر بكثرة في الإنترنت. انسخ نص المنشور والصقه في الخانة، فتقسّمه الأداة وتطابقه.' });
     }
     // إن تعذّر النموذج والنص قصير: نعرض ما يطابقه في الموسوعة إن وُجد، مع التنبيه.
     if (!body.image && err instanceof ApiError && (err.status === 503 || err.status === 504)) {
