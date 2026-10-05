@@ -38,8 +38,8 @@ a{color:var(--violet)}
 .brand h1{margin:0;font-weight:700;font-size:2.6rem;line-height:1.2;letter-spacing:0}
 .brand h1 span{font-weight:300;color:var(--teal)}
 .tagline{margin:6px 0 0;font-size:1.12rem;color:#DDE1FA;font-weight:300}
-.lede{max-width:34em;margin:22px 0 0;color:#B9BFE6;font-size:.98rem}
-.pix{position:absolute;left:28px;bottom:30px;width:90px;height:60px;pointer-events:none}
+.lede{margin:22px 0 0;padding-inline:16px 8px;color:#B9BFE6;font-size:.98rem}
+.pix{position:absolute;left:28px;top:72px;width:90px;height:60px;pointer-events:none}
 .pix b{position:absolute;background:var(--violet);opacity:.75}
 .pix b:nth-child(1){width:26px;height:26px;left:0;top:10px}
 .pix b:nth-child(2){width:16px;height:16px;left:36px;top:0;background:var(--teal);opacity:.5}
@@ -137,6 +137,11 @@ button:disabled{opacity:.55;cursor:wait}
 .report{text-align:left;margin-top:10px}.report a{color:var(--mute);font-size:.82rem}
 .alt{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--mute)}
 .alt q{display:block;margin-top:4px;font-family:'Amiri',serif;font-size:1.05rem;quotes:'«' '»'}
+.alt .alt-i{display:flex;align-items:flex-start;gap:10px;margin-top:6px}
+.alt .alt-i q{flex:1;margin:0}
+.cp{flex:none;margin-top:2px;padding:3px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--violet);font:inherit;font-size:.78rem;cursor:pointer}
+.cp:hover{border-color:var(--violet)}
+.cp.ok{color:#0a7d5f;border-color:#2EF2C2}
 /* خطوط مجمع الملك فهد لكل رواية (مستضافة في public/fonts، وتُحمَّل عند الحاجة فقط) */
 @font-face{font-family:kf-hafs;src:url(/fonts/hafs.18.woff2) format("woff2");font-display:swap}
 @font-face{font-family:kf-shouba;src:url(/fonts/shouba.8.woff2) format("woff2");font-display:swap}
@@ -156,6 +161,7 @@ mark{background:#FCEBD0;color:inherit;border-radius:3px;padding:0 2px}
 .wd span{font-family:'Amiri',serif;font-size:1.1rem}
 @media(max-width:640px){
   .diff{grid-template-columns:1fr}
+  footer .in{padding:20px 18px 26px}
   .hero-in{padding:16px 16px 30px}.challenge{font-size:.74rem;margin-bottom:14px}.lede{font-size:.92rem;margin-top:14px}
   main{padding:0 12px 32px}.panel{padding:16px;border-radius:16px}
   .drop{flex-direction:column;text-align:center;padding:20px 14px;gap:10px}
@@ -167,11 +173,11 @@ mark{background:#FCEBD0;color:inherit;border-radius:3px;padding:0 2px}
 }
 
 footer{background:var(--navy);color:#B9BFE6;font-size:.86rem;line-height:1.75}
-footer .in{max-width:880px;margin:0 auto;padding:24px 20px 30px}
-footer p{margin:0 0 10px;max-width:46em}
+footer .in{max-width:880px;margin:0 auto;padding:24px 36px 30px 28px}
+footer p{margin:0 0 10px}
 footer a{color:var(--teal)}
 footer .fine{color:#8E99CC;font-size:.8rem}
-footer .srcs{margin:0 0 12px;padding-inline-start:20px;max-width:46em}
+footer .srcs{margin:0 0 12px;padding-inline-start:20px}
 footer .srcs li{margin-bottom:6px}
 footer b{color:#DDE1FA;font-weight:600}
 </style>
@@ -439,8 +445,8 @@ function card(c){
   if(c.caution) h+=`<div class="caution">${esc(c.caution)}</div>`;
   if(c.scope) h+=`<div class="meta">نطاق البحث: ${esc(c.scope)}</div>`;
   if(c.dorar_link) h+=`<div class="meta"><a href="${esc(c.dorar_link)}" target="_blank" rel="noopener">افتح نتائج البحث في موقع الدرر السنية</a></div>`;
-  if((c.near_entries||[]).length){h+=`<div class="alt">في القاعدة نص قريب من هذا اللفظ وليس هو، وله حكم مستقل لا يُعرض هنا ولا ينطبق على لفظ المنشور. ألصقه وحده لترى بطاقته:`;c.near_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
-  if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. ألصق اللفظ وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
+  if((c.near_entries||[]).length){h+=`<div class="alt">في القاعدة نص قريب من هذا اللفظ وليس هو، وله حكم مستقل لا يُعرض هنا ولا ينطبق على لفظ المنشور. انسخه وألصقه وحده لترى بطاقته:`;c.near_entries.forEach(s=>{h+=altItem(s.matn)});h+=`</div>`}
+  if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. انسخ اللفظ وألصقه وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=altItem(s.matn)});h+=`</div>`}
   const subj=encodeURIComponent('مُسنِد AI: بلاغ عن بطاقة'+(c.entry_id?' '+c.entry_id:''));
   const body=encodeURIComponent('نص المنشور: '+(c.post_text||'')+'\nالحالة: '+label+(c.entry_id?'\nالمدخل: '+c.entry_id:'')+'\n\nملاحظتي:\n');
   h+=`<div class="meta report"><a href="mailto:mosnidai01@gmail.com?subject=${subj}&body=${body}">أبلغ عن خطأ في هذه البطاقة</a></div>`;
@@ -467,6 +473,12 @@ $('go').addEventListener('click',async()=>{
   }catch(e){setStatus('تعذّر الاتصال بالخادم. أعد المحاولة.')}
   finally{$('go').disabled=false}
 });
+
+function altItem(t){return `<div class="alt-i"><q>${esc(t)}</q><button type="button" class="cp" data-t="${esc(t)}">نسخ اللفظ</button></div>`}
+document.addEventListener('click',e=>{const b=e.target.closest('.cp');if(!b)return;const t=b.dataset.t;
+ const done=()=>{b.textContent='نُسخ ✓';b.classList.add('ok');setTimeout(()=>{b.textContent='نسخ اللفظ';b.classList.remove('ok')},1800)};
+ const fb=()=>{const a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(_){}a.remove()};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,fb);else fb();});
 </script>
 </body>
 </html>
