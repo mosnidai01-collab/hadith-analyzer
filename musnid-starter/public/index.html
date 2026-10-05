@@ -134,7 +134,9 @@ button:disabled{opacity:.55;cursor:wait}
 .meta{font-size:.85rem;color:var(--mute);margin-top:8px}
 .caution{font-size:.92rem;color:var(--warn);margin-top:8px}
 .diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.report{text-align:left;margin-top:10px}.report a{color:var(--mute);font-size:.82rem}
+.report{margin-top:10px;font-size:.82rem}.report summary{cursor:pointer;color:var(--mute);text-decoration:underline;text-align:left;list-style:none}.report summary::-webkit-details-marker{display:none}.report summary:hover{color:var(--violet)}
+.report .rp{margin-top:8px;padding:10px 12px;background:var(--paper);border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+.report .rp-b{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.report .rp-b a,.report .rp-b .cp{margin:0;padding:4px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--violet);text-decoration:none;font-size:.82rem}.report .rp-b a:hover{border-color:var(--violet)}
 .alt{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--mute)}
 .alt q{display:block;margin-top:4px;font-family:'Amiri',serif;font-size:1.05rem;quotes:'«' '»'}
 .alt .alt-i{display:flex;align-items:flex-start;gap:10px;margin-top:6px}
@@ -448,8 +450,11 @@ function card(c){
   if((c.near_entries||[]).length){h+=`<div class="alt">في القاعدة نص قريب من هذا اللفظ وليس هو، وله حكم مستقل لا يُعرض هنا ولا ينطبق على لفظ المنشور. انسخه وألصقه وحده لترى بطاقته:`;c.near_entries.forEach(s=>{h+=altItem(s.matn)});h+=`</div>`}
   if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. انسخ اللفظ وألصقه وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=altItem(s.matn)});h+=`</div>`}
   const subj=encodeURIComponent('مُسنِد AI: بلاغ عن بطاقة'+(c.entry_id?' '+c.entry_id:''));
-  const body=encodeURIComponent('نص المنشور: '+(c.post_text||'')+'\nالحالة: '+label+(c.entry_id?'\nالمدخل: '+c.entry_id:'')+'\n\nملاحظتي:\n');
-  h+=`<div class="meta report"><a href="mailto:mosnidai01@gmail.com?subject=${subj}&body=${body}">أبلغ عن خطأ في هذه البطاقة</a></div>`;
+  // البلاغ: رابط mailto وحده لا يعمل إن لم يكن في الجهاز تطبيق بريد مضبوط، فنعرض ثلاث طرق
+  const pt=String(c.post_text||''), ptShort=pt.length>700?pt.slice(0,700)+'…':pt;
+  const plain='نص المنشور: '+ptShort+'\nالحالة: '+label+(c.entry_id?'\nالمدخل: '+c.entry_id:'')+'\n\nملاحظتي:\n';
+  const body=encodeURIComponent(plain);
+  h+=`<details class="meta report"><summary>أبلغ عن خطأ في هذه البطاقة</summary><div class="rp">أرسل بلاغك إلى <b dir="ltr">mosnidai01@gmail.com</b> بإحدى هذه الطرق:<div class="rp-b"><a href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=mosnidai01@gmail.com&amp;su=${subj}&amp;body=${body}" target="_blank" rel="noopener">افتح في Gmail</a><a href="mailto:mosnidai01@gmail.com?subject=${subj}&amp;body=${body}">افتح في تطبيق البريد</a><button type="button" class="cp" data-l="انسخ نص البلاغ" data-t="${esc('إلى: mosnidai01@gmail.com\n'+decodeURIComponent(subj)+'\n\n'+plain)}">انسخ نص البلاغ</button></div></div></details>`;
   return h+'</article>';
 }
 
@@ -476,7 +481,7 @@ $('go').addEventListener('click',async()=>{
 
 function altItem(t){return `<div class="alt-i"><q>${esc(t)}</q><button type="button" class="cp" data-t="${esc(t)}">نسخ اللفظ</button></div>`}
 document.addEventListener('click',e=>{const b=e.target.closest('.cp');if(!b)return;const t=b.dataset.t;
- const done=()=>{b.textContent='نُسخ ✓';b.classList.add('ok');setTimeout(()=>{b.textContent='نسخ اللفظ';b.classList.remove('ok')},1800)};
+ const done=()=>{b.textContent='نُسخ ✓';b.classList.add('ok');setTimeout(()=>{b.textContent=b.dataset.l||'نسخ اللفظ';b.classList.remove('ok')},1800)};
  const fb=()=>{const a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(_){}a.remove()};
  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,fb);else fb();});
 </script>
