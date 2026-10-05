@@ -454,7 +454,7 @@ function card(c){
   const pt=String(c.post_text||''), ptShort=pt.length>700?pt.slice(0,700)+'…':pt;
   const plain='نص المنشور: '+ptShort+'\nالحالة: '+label+(c.entry_id?'\nالمدخل: '+c.entry_id:'')+'\n\nملاحظتي:\n';
   const body=encodeURIComponent(plain);
-  h+=`<details class="meta report"><summary>أبلغ عن خطأ في هذه البطاقة</summary><div class="rp">أرسل بلاغك إلى <b dir="ltr">mosnidai01@gmail.com</b> بإحدى هذه الطرق:<div class="rp-b"><a href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=mosnidai01@gmail.com&amp;su=${subj}&amp;body=${body}" target="_blank" rel="noopener">افتح في Gmail</a><a href="mailto:mosnidai01@gmail.com?subject=${subj}&amp;body=${body}">افتح في تطبيق البريد</a><button type="button" class="cp" data-l="انسخ نص البلاغ" data-t="${esc('إلى: mosnidai01@gmail.com\n'+decodeURIComponent(subj)+'\n\n'+plain)}">انسخ نص البلاغ</button></div></div></details>`;
+  h+=`<details class="meta report"><summary>أبلغ عن خطأ في هذه البطاقة</summary><div class="rp">أرسل بلاغك إلى <b dir="ltr">mosnidai01@gmail.com</b> بإحدى هذه الطرق، واكتب ملاحظتك في آخره:<div class="rp-b"><a href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=mosnidai01@gmail.com&amp;su=${subj}&amp;body=${body}" target="_blank" rel="noopener">افتح في Gmail</a><a href="mailto:mosnidai01@gmail.com?subject=${subj}&amp;body=${body}">افتح في تطبيق البريد</a><button type="button" class="cp" data-l="انسخ نموذج البلاغ" data-t="${esc('إلى: mosnidai01@gmail.com\n'+decodeURIComponent(subj)+'\n\n'+plain)}">انسخ نموذج البلاغ</button></div></div></details>`;
   return h+'</article>';
 }
 
