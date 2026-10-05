@@ -502,20 +502,30 @@ async function extract({ text, image, mediaType }, hardDeadline) {
     ? 'اقرأ هذا المنشور واستخرج الادعاءات وفق التعليمات.'
     : `استخرج ادعاءات هذا المنشور وفق التعليمات:\n\n${text}` });
 
-  const gen = { responseMimeType: 'application/json' };
+  // مخطط إلزامي للرد: يمنع JSON المكسور في المنشورات الطويلة متعددة الادعاءات (ثبت في P06، 5 أكتوبر)
+  const STR = { type: 'STRING' }, NSTR = { type: 'STRING', nullable: true };
+  const gen = { responseMimeType: 'application/json', maxOutputTokens: 8192,
+    responseSchema: { type: 'OBJECT', required: ['readable', 'confidence', 'full_text', 'claims'],
+      properties: { readable: { type: 'BOOLEAN' }, confidence: { type: 'NUMBER' }, full_text: STR,
+        claims: { type: 'ARRAY', items: { type: 'OBJECT', required: ['type', 'text', 'uncertain'],
+          properties: { type: { type: 'STRING', enum: [...ALLOWED_TYPES] }, text: STR, uncertain: { type: 'BOOLEAN' },
+            publisher_grade: NSTR, cited_reference: NSTR, attributed_to: NSTR } } } } } };
   // اتركها غير مضبوطة ليبقى الافتراضي عند المزوّد؛ تُضبط من متغيرات البيئة عند الحاجة.
   if (process.env.GEMINI_TEMPERATURE) gen.temperature = Number(process.env.GEMINI_TEMPERATURE);
   if (process.env.GEMINI_THINKING_LEVEL) gen.thinkingConfig = { thinkingLevel: process.env.GEMINI_THINKING_LEVEL };
-  const body = JSON.stringify({
+  const makeBody = (g) => JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: 'user', parts }],
-    generationConfig: gen,
+    generationConfig: g,
   });
+  let body = makeBody(gen);
+  let schemaOn = true;
 
   const deadline = Math.min(Date.now() + TIME_BUDGET_MS, hardDeadline || Infinity);
   let last = 'لا نموذج متاح';
   let busy = 0; // عدد النماذج التي ردّت بازدحام أو نفاد حصة (429/503)
-  for (const model of MODELS) {
+  for (let mi = 0; mi < MODELS.length; mi++) {
+    const model = MODELS[mi];
     const remaining = deadline - Date.now();
     if (remaining < 1500) { last = 'انتهت المهلة'; break; }
     const ctrl = new AbortController();
@@ -527,7 +537,19 @@ async function extract({ text, image, mediaType }, hardDeadline) {
         { method: 'POST', signal: ctrl.signal,
           headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
           body });
-      if (res.ok) return { ex: parseModelJson(await res.json()), model };
+      if (res.ok) {
+        // رد غير صالح من نموذج: يُجرَّب النموذج التالي بدل إيقاف الطلب
+        try { return { ex: parseModelJson(await res.json()), model }; }
+        catch (e) { if (e instanceof ApiError) { console.error(e.message, model); last = `رد غير صالح من ${model}`; continue; } throw e; }
+      }
+      // إن رفض المزوّد المخطط (400) يُعاد الطلب نفسه دون مخطط، فلا يتعطل الموقع بسببه
+      if (res.status === 400 && schemaOn) {
+        console.error('رُفض مخطط الرد، يُعاد الطلب دونه', model);
+        schemaOn = false;
+        const { responseSchema, ...rest } = gen;
+        body = makeBody(rest);
+        mi--; continue;
+      }
       if (FALLBACK_STATUS.has(res.status)) {
         if (res.status === 429 || res.status === 503) busy++;
         last = `${res.status} من ${model}`; continue;
@@ -599,6 +621,8 @@ exports.handler = async (event) => {
       c.reading_warning = (c.uncertain || !inSource)
         ? 'قد لا يطابق هذا النص ما في المنشور حرفياً؛ قارنه بالأصل قبل الاعتماد على البطاقة.'
         : null;
+      // «النسبة كما وردت في المنشور» يجب أن تكون في المنشور فعلاً (أضاف النموذج «الله عز وجل» لآية لم يُنسب فيها شيء)
+      if (c.attributed_to && !source.includes(norm(c.attributed_to))) c.attributed_to = null;
     });
 
     const cards = ex.claims.map((c) => buildCard({ ...c, from_image: !!body.image })).filter(Boolean);
