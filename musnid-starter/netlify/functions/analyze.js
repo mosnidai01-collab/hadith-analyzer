@@ -531,45 +531,49 @@ const CLAUDE_FALLBACK_STATUS = new Set([400, 401, 403, 404, 408, 413, 429, 500, 
 const providerAvailable = (p) => p === 'gemini' ? !!process.env.GEMINI_API_KEY : !!process.env.ANTHROPIC_API_KEY;
 
 function parseClaudeJson(data) {
-  const blocks = data.content || [];
-  const tool = blocks.find((b) => b.type === 'tool_use' && b.name === 'record_extraction');
   const why = `[stop=${data.stop_reason || '?'} usage=${JSON.stringify(data.usage || {})}]`;
   if (data.stop_reason === 'refusal') throw new ApiError(`امتنع النموذج عن الطلب ${why}`, 502);
   if (data.stop_reason === 'max_tokens') throw new ApiError(`رد النموذج مقطوع ${why}`, 502);
-  if (!tool || !tool.input || typeof tool.input !== 'object') throw new ApiError(`رد المزوّد ليس JSON صالحاً ${why}`, 502);
-  return tool.input;
+  const txt = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text || '').join('').trim();
+  const clean = txt.replace(/```json|```/g, '');
+  const a = clean.indexOf('{'), b = clean.lastIndexOf('}');
+  try { return JSON.parse(a >= 0 && b > a ? clean.slice(a, b + 1) : clean); }
+  catch { throw new ApiError(`رد المزوّد ليس JSON صالحاً ${why}`, 502); }
 }
 
-const CLAUDE_TOOL = {
-  name: 'record_extraction',
-  description: 'سجّل نتيجة قراءة المنشور وتقسيمه إلى ادعاءات وفق التعليمات.',
-  input_schema: {
-    type: 'object',
-    required: ['readable', 'confidence', 'full_text', 'claims'],
-    properties: {
-      readable: { type: 'boolean' },
-      confidence: { type: 'number', minimum: 0, maximum: 1 },
-      full_text: { type: 'string' },
-      claims: { type: 'array', items: { type: 'object', required: ['type', 'text', 'uncertain'],
-        properties: {
-          type: { type: 'string', enum: [...ALLOWED_TYPES] },
-          text: { type: 'string' },
-          uncertain: { type: 'boolean' },
-          publisher_grade: { type: ['string', 'null'] },
-          cited_reference: { type: ['string', 'null'] },
-          attributed_to: { type: ['string', 'null'] },
-        } } },
-    },
+// مخطط الرد الإلزامي (structured outputs): تُلزَم به الإجابة نصاً بصيغة JSON.
+// ملاحظة: Sonnet 5.5 وأمثاله لا يقبلون فرض أداة بعينها (tool_choice) ويردّون 400، فيُستعمل output_config بدلها.
+const NULLABLE_STR = { type: ['string', 'null'] };
+const CLAUDE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['readable', 'confidence', 'full_text', 'claims'],
+  properties: {
+    readable: { type: 'boolean' },
+    confidence: { type: 'number', description: 'من 0 إلى 1' },
+    full_text: { type: 'string' },
+    claims: { type: 'array', items: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['type', 'text', 'uncertain', 'publisher_grade', 'cited_reference', 'attributed_to'],
+      properties: {
+        type: { type: 'string', enum: [...ALLOWED_TYPES] },
+        text: { type: 'string' },
+        uncertain: { type: 'boolean' },
+        publisher_grade: NULLABLE_STR,
+        cited_reference: NULLABLE_STR,
+        attributed_to: NULLABLE_STR,
+      } } },
   },
 };
 
 // محاولة واحدة لنموذج Claude؛ تعيد { ok, ex } أو { status, error }
-async function callClaude(model, { text, image, mediaType }, timeoutMs) {
+async function callClaude(model, { text, image, mediaType }, timeoutMs, withSchema = true) {
   const content = [];
   if (image) content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } });
   content.push({ type: 'text', text: image
-    ? 'اقرأ هذا المنشور واستخرج الادعاءات وفق التعليمات، وسجّلها بالأداة record_extraction.'
-    : `استخرج ادعاءات هذا المنشور وفق التعليمات، وسجّلها بالأداة record_extraction:\n\n${text}` });
+    ? 'اقرأ هذا المنشور واستخرج الادعاءات وفق التعليمات.'
+    : `استخرج ادعاءات هذا المنشور وفق التعليمات:\n\n${text}` });
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -580,13 +584,13 @@ async function callClaude(model, { text, image, mediaType }, timeoutMs) {
       body: JSON.stringify({
         model, max_tokens: Number(process.env.CLAUDE_MAX_TOKENS) || 16000,
         system: SYSTEM,
-        tools: [CLAUDE_TOOL],
-        tool_choice: { type: 'tool', name: 'record_extraction' },
+        ...(withSchema ? { output_config: { format: { type: 'json_schema', schema: CLAUDE_SCHEMA } } } : {}),
         messages: [{ role: 'user', content }],
       }) });
     if (!res.ok) {
       let detail = '';
-      try { const j = await res.json(); detail = (j.error && j.error.type) || ''; } catch { /* لا شيء */ }
+      // نوع الخطأ ورسالته من Anthropic (لا تحوي المفتاح) لتشخيص الرفض في السجل
+      try { const j = await res.json(); detail = j.error ? `${j.error.type || ''}: ${String(j.error.message || '').slice(0, 200)}` : ''; } catch { /* لا شيء */ }
       return { status: res.status, error: `${res.status}${detail ? ' ' + detail : ''} من ${model}` };
     }
     try { return { ok: true, ex: parseClaudeJson(await res.json()) }; }
@@ -648,7 +652,12 @@ async function extract(input, hardDeadline) {
         const remaining = softDeadline() - Date.now();
         if (remaining < 1500) { last = 'انتهت المهلة'; break; }
         tried++;
-        const r = await callClaude(model, input, remaining);
+        let r = await callClaude(model, input, remaining);
+        // إن رُفض مخطط الرد (400) يُعاد الطلب دونه مرة واحدة، ويبقى الرد مقيداً بتعليمات JSON في SYSTEM
+        if (!r.ok && r.status === 400 && softDeadline() - Date.now() > 3000) {
+          console.error('Claude: رُفض مخطط الرد، يُعاد الطلب دونه:', r.error);
+          r = await callClaude(model, input, softDeadline() - Date.now(), false);
+        }
         if (r.ok) return { ex: r.ex, model };
         console.error('Claude:', r.error);
         last = r.error;
@@ -811,6 +820,7 @@ exports.handler = async (event) => {
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
   } catch (err) {
     console.error(err.message);
+    if (only) return reply(err.status || 502, { error: 'اختبار: ' + err.message });
     // نص ملصق تعذّر على النموذج تقسيمه: تُقسّمه الأداة بنفسها وتطابق كل مقطع مع القاعدة والمصحف دون نموذج.
     if (!body.image && err instanceof ApiError) {
       const local = localSplitCards(body.text);
