@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مُسنِد AI: تحقّق من المنشور قبل نشره</title>
+<meta name="description" content="مُسنِد AI: ألصق صورة المنشور أو نصه، فتصلك بطاقة تحقق لكل آية أو حديث أو قول منسوب فيه، بالمصدر والحكم المنقول كما هو.">
+<meta name="theme-color" content="#12183F">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22-34 -34 68 68%22%3E%3Crect x=%22-34%22 y=%22-34%22 width=%2268%22 height=%2268%22 rx=%2215%22 fill=%22%2312183F%22/%3E%3Cg fill=%22none%22 stroke-linejoin=%22round%22%3E%3Cg stroke=%22%237C6CFF%22 stroke-width=%224%22%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%280%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%2845%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%2890%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%28135%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%28180%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%28225%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%28270%29%22/%3E%3Cpath d=%22M0 -14Q8.5 -22.5 0 -31Q-8.5 -22.5 0 -14Z%22 transform=%22rotate%28315%29%22/%3E%3C/g%3E%3C/g%3E%3Ccircle r=%2211%22 fill=%22%232EF2C2%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Readex+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+/* هوية التحدي: الكحلي والبنفسجي والتركواز والأبيض المائل للأزرق، وخط Readex Pro */
+:root{
+  --navy:#12183F;--navy2:#1B2356;--violet:#6150EA;--teal:#2EF2C2;--teal-ink:#0B7A62;
+  --paper:#F2F4FF;--lav:#E0D9FB;--line:#CBCFE6;--mute:#4A5590;--warn:#9A5B00;--card:#fff;
+  --ink:var(--navy);--ok:var(--teal-ink)
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.8 'Readex Pro',system-ui,sans-serif}
+a{color:var(--violet)}
+:focus-visible{outline:3px solid var(--violet);outline-offset:2px}
+
+/* الترويسة: نجمة ثمانية متكررة خافتة، ومربعات البكسل من هوية التحدي */
+.hero{position:relative;overflow:hidden;color:#fff;background:
+  radial-gradient(60% 90% at 8% 110%,rgba(46,242,194,.22),transparent 60%),
+  radial-gradient(50% 80% at 0% 70%,rgba(97,80,234,.45),transparent 65%),
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Crect x='35' y='35' width='50' height='50'/%3E%3Crect x='35' y='35' width='50' height='50' transform='rotate(45 60 60)'/%3E%3Cpath d='M0 60h25M95 60h25M60 0v25M60 95v25'/%3E%3C/g%3E%3C/svg%3E"),
+  var(--navy)}
+.hero-in{max-width:880px;margin:0 auto;padding:22px 20px 34px;position:relative}
+.challenge{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:#C9CEF0;border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:3px 14px;margin-bottom:22px}
+.challenge i{width:7px;height:7px;background:var(--teal);display:inline-block}
+.brand{display:flex;align-items:center;gap:18px}
+.brand svg{flex:none;width:86px;height:86px}
+.brand h1{margin:0;font-weight:700;font-size:2.6rem;line-height:1.2;letter-spacing:0}
+.brand h1 span{font-weight:300;color:var(--teal)}
+.tagline{margin:6px 0 0;font-size:1.12rem;color:#DDE1FA;font-weight:300}
+.lede{max-width:34em;margin:22px 0 0;color:#B9BFE6;font-size:.98rem}
+.pix{position:absolute;left:28px;bottom:30px;width:90px;height:60px;pointer-events:none}
+.pix b{position:absolute;background:var(--violet);opacity:.75}
+.pix b:nth-child(1){width:26px;height:26px;left:0;top:10px}
+.pix b:nth-child(2){width:16px;height:16px;left:36px;top:0;background:var(--teal);opacity:.5}
+.pix b:nth-child(3){width:12px;height:12px;left:44px;top:34px;background:#0B1030;opacity:1}
+@media(max-width:640px){.pix{display:none}.brand h1{font-size:2rem}.brand svg{width:58px;height:58px}}
+
+main{max-width:880px;margin:-18px auto 0;padding:0 20px 40px;position:relative}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 18px 40px -28px rgba(18,24,63,.45)}
+.panel h2{margin:0 0 4px;font-size:1.25rem;font-weight:600}
+.panel .hint{margin:0 0 16px;color:var(--mute);font-size:.95rem}
+
+/* منطقة الصورة: لصق أو سحب أو اختيار ملف */
+.drop{position:relative;border:2px dashed #AEB4DA;border-radius:16px;background:#FAFBFF;padding:22px;display:flex;gap:18px;align-items:center;transition:border-color .15s,background .15s,box-shadow .15s;cursor:pointer}
+.drop:hover{border-color:var(--violet);background:#F5F3FF}
+.drop.over{border-style:solid;border-color:var(--violet);background:#EEEBFF;box-shadow:0 0 0 5px rgba(97,80,234,.18)}
+.drop:focus-visible{outline:3px solid var(--violet);outline-offset:3px}
+.drop .ic{flex:none;width:68px;height:68px;border-radius:16px;background:var(--lav);display:grid;place-items:center;color:var(--violet);transition:transform .15s}
+.drop.over .ic{transform:scale(1.08);background:var(--violet);color:#fff}
+.drop strong{display:block;font-weight:600;font-size:1.08rem}
+.drop small{display:block;color:var(--mute);font-size:.9rem;line-height:1.6}
+.drop .on-drag{display:none}.drop.over .on-drag{display:block}.drop.over .off-drag{display:none}
+.pastepad{position:absolute;inset:0;border-radius:14px;color:transparent;caret-color:transparent;outline:none;overflow:hidden;cursor:text;z-index:1}
+.pastepad:focus{box-shadow:inset 0 0 0 3px var(--violet)}
+.drop.focus{border-color:var(--violet);background:#F5F3FF}
+.touch-only{display:none}
+@media (pointer:coarse){.touch-only{display:block}.desk-only{display:none}.pastepad{display:none}}
+.img-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.img-btns button{flex:1 1 180px}
+kbd{font:600 .8rem 'Readex Pro',sans-serif;background:var(--paper);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px}
+.thumb{display:none;align-items:center;gap:14px;margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.thumb.on{display:flex}
+.thumb img{max-height:120px;max-width:55%;border-radius:8px;border:1px solid var(--line)}
+.thumb .t{flex:1;font-size:.92rem;color:var(--mute)}
+.or{display:flex;align-items:center;gap:12px;color:var(--mute);font-size:.88rem;margin:16px 0 10px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+textarea{width:100%;min-height:110px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font:inherit;font-family:'Readex Pro','Amiri',serif;background:#fff;color:var(--ink);resize:vertical}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+button{font:inherit;font-weight:600;padding:10px 20px;border-radius:12px;border:1px solid var(--navy);background:#fff;color:var(--navy);cursor:pointer}
+button.primary{min-width:260px;background:linear-gradient(135deg,#2EF2C2,#7CF7DC);border:0;color:var(--navy);font-weight:700;padding:14px 56px;font-size:1.12rem;border-radius:14px;box-shadow:0 12px 24px -12px rgba(46,242,194,.95),inset 0 -3px 0 rgba(18,24,63,.12)}
+button.primary:hover{background:linear-gradient(135deg,#23E3B5,#6AF0D2)}
+button.primary:focus-visible{outline-color:var(--navy)}
+.examples{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 0;font-size:.88rem;color:var(--mute)}
+.examples button{font-weight:400;font-size:.88rem;padding:5px 14px;border-radius:99px;border:1px solid var(--lav);background:#F5F3FF;color:var(--violet)}
+.examples button:hover{border-color:var(--violet)}
+button.ghost{border-color:var(--line);font-weight:400;padding:9px 16px;font-size:.95rem;background:#fff}
+button.ghost:hover{border-color:var(--violet);color:var(--violet)}
+button:disabled{opacity:.55;cursor:wait}
+.actions .note{color:var(--mute);font-size:.85rem}
+
+/* مراحل الفحص: متصلة بخط، وتتحرك أثناء الفحص وتكتمل عند النتيجة */
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:18px 0 0;padding:0;list-style:none;counter-reset:s;position:relative}
+.how::before{content:"";position:absolute;top:17px;inset-inline:16.6%;height:3px;background:var(--line);border-radius:3px}
+.how li{counter-increment:s;text-align:center;position:relative;font-size:.88rem;color:var(--mute);line-height:1.6;padding:0 8px}
+.how li::before{content:counter(s,arabic-indic);display:grid;place-items:center;margin:0 auto 8px;width:36px;height:36px;border-radius:50%;background:#fff;border:3px solid var(--line);color:var(--mute);font-weight:700;position:relative;transition:background .3s,border-color .3s,color .3s}
+.how b{display:block;color:var(--ink);font-weight:600;font-size:.95rem}
+.how.busy::before{background:linear-gradient(90deg,var(--line),var(--violet),var(--line));background-size:200% 100%;animation:flow 1.4s linear infinite}
+.how.busy li::before{border-color:var(--violet);color:var(--violet)}
+.how.done::before{background:var(--teal)}
+.how.done li::before{content:"✓";background:var(--teal);border-color:var(--teal);color:var(--navy)}
+@keyframes flow{to{background-position:-200% 0}}
+@media(max-width:640px){
+  .how{grid-template-columns:1fr;gap:14px}
+  .how::before{top:18px;bottom:18px;inset-inline:auto;inset-inline-start:17px;width:3px;height:auto}
+  .how li{text-align:start;padding-inline-start:52px;min-height:36px}
+  .how li::before{position:absolute;inset-inline-start:0;top:0;margin:0}
+}
+#status{margin:22px 0 14px;color:var(--mute);min-height:1.8em}
+#status.busy::before{content:"";display:inline-block;width:14px;height:14px;margin-inline-end:10px;vertical-align:-2px;border:2px solid var(--line);border-top-color:var(--violet);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* بطاقة التحقق */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:0 0 16px;border-inline-start:6px solid var(--line)}
+.card.k-ok{border-inline-start-color:var(--teal)}.card.k-warn{border-inline-start-color:#F2B544}.card.k-mute{border-inline-start-color:var(--line)}
+.card .head{display:flex;justify-content:space-between;gap:10px;font-weight:600;margin-bottom:8px;align-items:center}
+.badge{font-size:.85rem;font-weight:600;padding:2px 12px;border-radius:99px;white-space:nowrap}
+.b-ok{background:#D5FBF1;color:var(--ok)}.b-warn{background:#FCEBD0;color:var(--warn)}.b-mute{background:#E8E9F2;color:var(--mute)}
+.post{color:var(--mute);margin:0 0 10px}
+.src{border-inline-start:5px solid var(--violet);background:#F3F1FE;padding:8px 14px;margin:10px 0;font-family:'Amiri',serif;font-size:1.25rem;line-height:2;border-radius:0 8px 8px 0}
+.src b{display:block;font:600 .8rem 'Readex Pro',sans-serif;color:var(--violet)}
+.v{margin:8px 0;padding-inline-start:12px;border-inline-start:2px solid var(--line);font-size:.95rem}
+.v small{display:block;color:var(--mute)}
+.v .unc,.meta .unc{color:var(--warn)}
+.meta{font-size:.85rem;color:var(--mute);margin-top:8px}
+.caution{font-size:.92rem;color:var(--warn);margin-top:8px}
+.diff{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.report{text-align:left;margin-top:10px}.report a{color:var(--mute);font-size:.82rem}
+.alt{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--mute)}
+.alt q{display:block;margin-top:4px;font-family:'Amiri',serif;font-size:1.05rem;quotes:'«' '»'}
+/* خطوط مجمع الملك فهد لكل رواية (مستضافة في public/fonts، وتُحمَّل عند الحاجة فقط) */
+@font-face{font-family:kf-hafs;src:url(/fonts/hafs.18.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-shouba;src:url(/fonts/shouba.8.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-warsh;src:url(/fonts/warsh.10.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-qaloon;src:url(/fonts/qaloon.10.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-doori;src:url(/fonts/doori.9.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-soosi;src:url(/fonts/soosi.9.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-bazzi;src:url(/fonts/bazzi.7.woff2) format("woff2");font-display:swap}
+@font-face{font-family:kf-qumbul;src:url(/fonts/qumbul.7.woff2) format("woff2");font-display:swap}
+.ayah{font-size:1.45rem;line-height:2.3;border-inline-start-color:var(--teal-ink);background:#EEF8F4}
+.ayah b{color:var(--ok)}
+.qsum{font-weight:600;color:var(--ok);margin:6px 0}
+.qsum.w{color:var(--warn)}
+.ql{font-size:.9rem;color:var(--mute);margin:2px 0}
+mark{background:#FCEBD0;color:inherit;border-radius:3px;padding:0 2px}
+.wd{font-size:.95rem;margin:4px 0}
+.wd span{font-family:'Amiri',serif;font-size:1.1rem}
+@media(max-width:640px){
+  .diff{grid-template-columns:1fr}
+  .hero-in{padding:16px 16px 30px}.challenge{font-size:.74rem;margin-bottom:14px}.lede{font-size:.92rem;margin-top:14px}
+  main{padding:0 12px 32px}.panel{padding:16px;border-radius:16px}
+  .drop{flex-direction:column;text-align:center;padding:20px 14px;gap:10px}
+  .actions{flex-direction:column;align-items:stretch}
+  button.primary{width:100%;padding:15px;font-size:1.15rem}
+  .actions .note{text-align:center}
+  .thumb{flex-direction:column;align-items:stretch}.thumb img{max-width:100%;max-height:200px;object-fit:contain}
+  .card{padding:14px 14px}
+}
+
+footer{background:var(--navy);color:#B9BFE6;font-size:.86rem;line-height:1.75}
+footer .in{max-width:880px;margin:0 auto;padding:24px 20px 30px}
+footer p{margin:0 0 10px;max-width:46em}
+footer a{color:var(--teal)}
+footer .fine{color:#8E99CC;font-size:.8rem}
+footer .srcs{margin:0 0 12px;padding-inline-start:20px;max-width:46em}
+footer .srcs li{margin-bottom:6px}
+footer b{color:#DDE1FA;font-weight:600}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <div class="challenge"><i aria-hidden="true"></i>مشاركة في «تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي» · المسار 04</div>
+    <div class="brand">
+      <!-- الشعار: وردة هندسية ثمانية متماثلة (الأصالة الإسلامية) تصل بين بتلاتها خطوط وعُقد كشبكة البيانات (الحل الرقمي)، وفي قاعدتها علامة التحقق -->
+      <svg viewBox="-36 -36 72 72" role="img" aria-label="شعار مُسنِد AI"><g fill="none" stroke-linejoin="round"><g stroke="#6150EA" stroke-width="2.3"><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(0)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(45)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(90)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(135)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(180)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(225)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(270)"/><path d="M0 -13Q10.5 -23.5 0 -34Q-10.5 -23.5 0 -13Z" transform="rotate(315)"/></g><g stroke="#2EF2C2" stroke-opacity=".75" stroke-width="1.3" stroke-linecap="round"><path d="M3.94 -17.05Q11.48 -27.72 9.27 -14.84"/><path d="M14.84 -9.27Q27.72 -11.48 17.05 -3.94"/><path d="M17.05 3.94Q27.72 11.48 14.84 9.27"/><path d="M9.27 14.84Q11.48 27.72 3.94 17.05"/><path d="M-3.94 17.05Q-11.48 27.72 -9.27 14.84"/><path d="M-14.84 9.27Q-27.72 11.48 -17.05 3.94"/><path d="M-17.05 -3.94Q-27.72 -11.48 -14.84 -9.27"/><path d="M-9.27 -14.84Q-11.48 -27.72 -3.94 -17.05"/></g><circle r="12" stroke="#2EF2C2" stroke-width="2.3"/></g><g fill="#2EF2C2"><circle cx="9.11" cy="-21.99" r="1.7"/><circle cx="21.99" cy="-9.11" r="1.7"/><circle cx="21.99" cy="9.11" r="1.7"/><circle cx="9.11" cy="21.99" r="1.7"/><circle cx="-9.11" cy="21.99" r="1.7"/><circle cx="-21.99" cy="9.11" r="1.7"/><circle cx="-21.99" cy="-9.11" r="1.7"/><circle cx="-9.11" cy="-21.99" r="1.7"/></g><path d="M-6 .5l4 4 8.5-9" fill="none" stroke="#2EF2C2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>
+        <h1>مُسنِد <span dir="ltr" lang="en">AI</span></h1>
+        <p class="tagline">حل رقمي متكامل وموثوق لخدمة المحتوى الإسلامي</p>
+      </div>
+    </div>
+    <p class="lede">قبل أن تعيد نشر آية أو حديث أو قول منسوب، الصق صورة المنشور هنا. تقرأ الأداة النص، وتبحث عن كل ادعاء فيه في المصحف ومصادر الحديث، وتنقل لك حكم العلماء كما هو، منسوباً إلى قائله وكتابه.</p>
+    <div class="pix" aria-hidden="true"><b></b><b></b><b></b></div>
+  </div>
+</header>
+
+<main>
+  <section class="panel" aria-labelledby="t-check">
+    <h2 id="t-check">تحقّق من منشور</h2>
+    <p class="hint">انسخ صورة المنشور من أي تطبيق ثم الصقها هنا، أو الصق نصه في الخانة.</p>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-describedby="drop-help">
+      <div class="ic" aria-hidden="true">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>
+      </div>
+      <div>
+        <strong class="off-drag"><span class="desk-only">الصق صورة المنشور هنا</span><span class="touch-only">لصق الصورة</span></strong>
+        <strong class="on-drag">أفلت الصورة هنا</strong>
+        <small id="drop-help" class="off-drag"><span class="desk-only">انسخ الصورة، ثم اضغط في هذا المربع <span dir="ltr"><kbd>Ctrl</kbd>+<kbd>V</kbd></span> أو زر الفأرة الأيمن واختر «لصق»، أو اسحب الصورة إليه.</span><span class="touch-only">انسخ صورة المنشور من التطبيق، ثم اضغط هنا.</span></small>
+      </div>
+      <input id="img" type="file" accept="image/*" hidden>
+      <div class="pastepad" id="pad" contenteditable="true" role="textbox" aria-label="الصق صورة المنشور هنا" spellcheck="false"></div>
+    </div>
+    <div class="img-btns">
+      <button type="button" class="ghost" id="pickBtn">ارفع الصورة</button>
+    </div>
+    <div class="thumb" id="thumb">
+      <img id="preview" alt="الصورة التي ستُفحص">
+      <div class="t">ستُفحص هذه الصورة.<br><button type="button" class="ghost" id="clearImg">إزالة الصورة</button></div>
+    </div>
+
+    <div class="or">أو</div>
+    <label for="txt" class="hint" style="display:block;margin:0 0 6px">نص المنشور</label>
+    <textarea id="txt" placeholder="الصق نص المنشور هنا"></textarea>
+
+    <div class="actions">
+      <button id="go" class="primary">تحقّق</button>
+      <span class="note" id="which"></span>
+    </div>
+    <div class="examples" id="examples">جرّب مثالاً جاهزاً:
+      <button type="button" data-ex="list">منشور أحاديث رمضان</button>
+      <button type="button" data-ex="conflict">حديث بأحكام متعارضة</button>
+      <button type="button" data-ex="warsh">آية برواية ورش</button>
+    </div>
+    <ol class="how" id="how" aria-label="مراحل الفحص">
+      <li><b>القراءة</b>يقرأ النموذج اللغوي نص الصورة كما هو، دون تصحيح ولا إكمال.</li>
+      <li><b>التقسيم</b>يُفصل المنشور إلى آيات وأحاديث وأقوال منسوبة، لكلٍّ بطاقته.</li>
+      <li><b>المطابقة</b>يُطابق كل ادعاء بالمصحف وقاعدة الأحكام والموسوعة الحديثية، ويُنقل الحكم كما هو.</li>
+    </ol>
+
+  </section>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="out"></div>
+</main>
+
+<footer>
+  <div class="in">
+    <p class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي لقراءته (Anthropic Claude، وGoogle Gemini إن تعذّر الأول)، ويخضع لشروط المزوّد. وما لم يوجد في قاعدة الأداة يُبحث عن نصه في الموسوعة الحديثية بموقع الدرر السنية.</p>
+    <p><b>من أين تأتي النتائج:</b></p>
+    <ul class="srcs">
+      <li><b>القرآن الكريم:</b> ثماني روايات من الموسوعة القرآنية (Quranpedia)، وتُعرض بخطوط مجمع الملك فهد لطباعة المصحف الشريف.</li>
+      <li><b>قاعدة أحكام الأداة:</b> عدد محدود من الأحاديث والأقوال المتداولة (59 مدخلاً)، نُقلت أحكامها بنصها منسوبة إلى قائليها من كتب أهل العلم عبر المكتبة الشاملة. قوبل 33 مدخلاً منها على النسخ المطبوعة، والباقي لم يُراجَع بعد، وتذكر البطاقة ذلك.</li>
+      <li><b>الموسوعة الحديثية في موقع الدرر السنية (dorar.net):</b> ما لم يوجد في القاعدة يُبحث عنه فيها مباشرة، وتُنقل «خلاصة حكم المحدث» كما هي في الموسوعة، دون مراجعة مصادرها الأصلية.</li>
+    </ul>
+    <p>تعرض البطاقة ما وُجد في هذه المصادر وحدها، فلا يعني ظهور حكم أنه كل ما قيل في الحديث، ولا يعني غياب النتيجة أن النص لا أصل له.</p>
+    <p>للتواصل، أو للإبلاغ عن خطأ في بطاقة أو حكم: <a href="mailto:mosnidai01@gmail.com">mosnidai01@gmail.com</a>. تُراجَع البلاغات وتُصحَّح القاعدة بناءً عليها.</p>
+    <p class="fine">مُسنِد AI مشاركة فردية في «تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي» 2026. <a href="https://github.com/mosnidai01-collab/hadith-analyzer" target="_blank" rel="noopener">الشيفرة المصدرية على GitHub</a></p>
+  </div>
+</footer>
+
+<script>
+const $=id=>document.getElementById(id);
+let imageB64=null;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- الصورة: لصق، أو سحب، أو اختيار ملف ----------
+function setImage(file){
+  if(!file||!/^image\//.test(file.type)){$('status').textContent='الملف ليس صورة. الصق صورة المنشور أو اختر ملف صورة.';return}
+  const im=new Image();
+  im.onload=()=>{ // تصغير الصورة حتى لا يتجاوز الطلب حد المنصة
+    const k=Math.min(1,1600/Math.max(im.width,im.height));
+    const c=document.createElement('canvas');
+    c.width=im.width*k; c.height=im.height*k;
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    const url=c.toDataURL('image/jpeg',.85);
+    imageB64=url.split(',')[1];
+    $('preview').src=url; $('thumb').classList.add('on');
+    $('status').textContent='';
+    updateWhich();
+  };
+  im.onerror=()=>{$('status').textContent='تعذّر فتح الصورة. جرّب صورة أخرى.'};
+  im.src=URL.createObjectURL(file);
+}
+function clearImage(){imageB64=null;$('thumb').classList.remove('on');$('preview').removeAttribute('src');$('img').value='';updateWhich()}
+function updateWhich(){
+  const t=$('txt').value.trim();
+  $('which').textContent=imageB64&&t?'سيُفحص النص الملصق؛ أزل النص لفحص الصورة.':imageB64?'سيُفحص نص الصورة.':'';
+}
+$('img').addEventListener('change',e=>{const f=e.target.files[0]; if(f) setImage(f)});
+const touch=matchMedia('(pointer:coarse)').matches;
+$('pickBtn').addEventListener('click',()=>$('img').click());
+// الحاسوب: المربع خانة لصق (Ctrl+V أو زر الفأرة الأيمن ثم «لصق»)، ولا تُكتب فيه حروف
+$('pad').addEventListener('beforeinput',e=>{if(e.inputType!=='insertFromPaste')e.preventDefault()});
+$('pad').addEventListener('input',()=>{$('pad').textContent=''});
+$('pad').addEventListener('focus',()=>$('drop').classList.add('focus'));
+$('pad').addEventListener('blur',()=>$('drop').classList.remove('focus'));
+// الهاتف: المربع نفسه زر «لصق الصورة»
+async function pasteFromClipboard(){
+  if(!(navigator.clipboard&&navigator.clipboard.read)){setStatus('متصفحك لا يسمح بلصق الصور هنا. احفظ الصورة ثم اضغط «ارفع الصورة».');return}
+  try{
+    for(const it of await navigator.clipboard.read()){
+      const type=it.types.find(t=>t.startsWith('image/'));
+      if(type){setImage(new File([await it.getType(type)],'paste',{type}));return}
+    }
+    setStatus('لا توجد صورة منسوخة. انسخ صورة المنشور أولاً، أو اضغط «ارفع الصورة».');
+  }catch(e){setStatus('لم يسمح المتصفح بقراءة الصورة المنسوخة. اضغط «ارفع الصورة» واخترها من المعرض.')}
+}
+$('drop').addEventListener('click',()=>{ if(touch) pasteFromClipboard(); else $('pad').focus(); });
+$('drop').addEventListener('keydown',e=>{if(e.target===$('drop')&&(e.key==='Enter'||e.key===' ')){e.preventDefault(); touch?pasteFromClipboard():$('pad').focus()}});
+['dragenter','dragover'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over')}));
+$('drop').addEventListener('drop',e=>{const f=[...(e.dataTransfer.files||[])].find(f=>/^image\//.test(f.type)); if(f) setImage(f)});
+// لصق الصورة في أي مكان من الصفحة (ويبقى لصق النص في الخانة كما هو)
+document.addEventListener('paste',e=>{
+  const item=[...(e.clipboardData&&e.clipboardData.items||[])].find(i=>i.kind==='file'&&/^image\//.test(i.type));
+  if(!item) return;
+  e.preventDefault(); setImage(item.getAsFile());
+});
+$('clearImg').addEventListener('click',clearImage);
+// أمثلة جاهزة للتجربة بضغطة: نصوص من مجموعة الاختبار، ونص الآية من بيانات المصحف في الأداة (رواية ورش، البقرة 5)
+const EXAMPLES={"list": "أحاديث منتشرة لا تصح عن رمضان\n1. صوموا تصحوا (ضعيف)\n2. يوم صومكم يوم نحركم (لا أصل له)\n3. أول شهر رمضان رحمة، وأوسطه مغفرة، وآخره عتق من النار (منكر)\n4. خمس يفطرن الصائم وينقضن الوضوء: الكذب، والنميمة، والغيبة، والنظر بشهوة، واليمين الكاذبة (ضعيف)\n5. إن للصائم عند فطره دعوة لا ترد (ضعيف)\n6. رجب شهر الله، وشعبان شهري، ورمضان شهر أمتي (مكذوب)", "conflict": "قال رسول الله ﷺ: إن للصائم عند فطره دعوة ما ترد", "warsh": "إِنَّ اَ۬لذِينَ كَفَرُواْ سَوَآءٌ عَلَيْهِمُۥٓ ءَآنذَرْتَهُمُۥٓ أَمْ لَمْ تُنذِرْهُمْ لَا يُومِنُونَۖ"};
+document.querySelectorAll('#examples button').forEach(b=>b.addEventListener('click',()=>{clearImage();$('txt').value=EXAMPLES[b.dataset.ex];updateWhich();$('go').click()}));
+$('txt').addEventListener('input',updateWhich);
+
+const BADGE={found_verdict:['وُجد بحكم منقول','b-ok'],found_no_verdict:['وُجد دون حكم منقول','b-warn'],
+ found_different:['وُجد بلفظ مختلف','b-warn'],not_found:['لم يُعثر على مرجع','b-mute'],
+ out_of_scope:['خارج نطاق الأداة','b-mute'],quran_found:['وُجد في المصحف','b-ok'],quran_different:['وُجد بلفظ مختلف','b-warn'],
+ found_dorar:['وُجد في الموسوعة الحديثية (الدرر)','b-warn']};
+const WORDING=r=>r.same_wording?'بلفظ المنشور':r.within?'نص المنشور مقتطع من هذا اللفظ':'لفظ مختلف عن المنشور';
+
+const KF={hafs:1,shouba:1,warsh:1,qaloon:1,doori:1,soosi:1,bazzi:1,qumbul:1};
+function ayah(src){
+  const f=KF[src.riwaya]?`font-family:kf-${src.riwaya},'Amiri',serif`:'';
+  return `<div class="src ayah" style="${f}"><b>نص المصحف: رواية ${esc(src.riwaya_name)} · ${esc(src.where)}</b>${esc(src.text)}</div>`;
+}
+const marked=arr=>arr.map(([w,d])=>d?`<mark>${esc(w)}</mark>`:esc(w)).join(' ');
+function quranBlock(q){
+  let h=`<div class="qsum${q.agreeing||!q.diff&&!q.word_diffs?'':' w'}">${esc(q.summary)}</div>`;
+  if(q.diff){
+    h+=`<div class="diff"><div class="src"><b>نص المنشور</b>${marked(q.diff.post)}</div>${ayah(q.source).replace('<b>','<b>').replace(esc(q.source.text),marked(q.diff.source))}</div>`;
+  } else h+=ayah(q.source);
+  if((q.word_diffs||[]).length){
+    h+=`<div class="meta"><b>مواضع الاختلاف في التشكيل عن هذه الرواية:</b></div>`;
+    const sf=KF[q.source.riwaya]?` style="font-family:kf-${q.source.riwaya},'Amiri',serif"`:'';
+    q.word_diffs.forEach(d=>{h+=`<div class="wd">المنشور: <span>${esc(d.post)}</span> ← المصحف: <span${sf}>${esc(d.source)}</span></div>`});
+  }
+  if((q.groups||[]).length>1||(q.groups||[]).length===1&&q.groups[0].riwayat.length>1){
+    h+=`<div class="meta"><b>موضع الآية (يختلف عدّ الآي بين الروايات):</b></div>`;
+    q.groups.forEach(g=>{h+=`<div class="ql">${esc(g.where)}: ${esc(g.riwayat.join('، '))}</div>`});
+  }
+  const QP={hafs:1,warsh:4,bazzi:5,doori:6,qaloon:7,qumbul:8,shouba:9,soosi:10};
+  if(QP[q.source.riwaya]&&q.source.sura_no) h+=`<div class="meta"><a href="https://quranpedia.net/surah/${QP[q.source.riwaya]}/${q.source.sura_no}" target="_blank" rel="noopener">افتح السورة في الموسوعة القرآنية (Quranpedia) برواية ${esc(q.source.riwaya_name)}</a></div>`;
+  if(q.image_caution) h+=`<div class="caution">${esc(q.image_caution)}</div>`;
+  if(q.repeated) h+=`<div class="meta">${esc(q.repeated)}</div>`;
+  if(q.missing) h+=`<div class="meta">لا يوافق رسمُه رواية: ${esc(q.missing.join('، '))}.</div>`;
+  if((q.others||[]).length){
+    h+=`<details class="meta"><summary>فروق التشكيل عن الروايات الأخرى</summary>`;
+    q.others.forEach(o=>{h+=`<div class="ql">${esc(o.riwaya_name)}: ${o.word_diffs.map(d=>`${esc(d.post)} ← ${esc(d.source)}`).join('، ')||'—'}</div>`});
+    h+=`</details>`;
+  }
+  return h;
+}
+
+function card(c){
+  const [label,cls]=c.dorar_failed?['تعذّر البحث في الدرر','b-warn']:c.partial?['وُجد ضمن لفظ أطول','b-warn']:(BADGE[c.state]||['—','b-mute']);
+  let h=`<article class="card k-${cls.slice(2)}"><div class="head"><span>${esc(c.type)}</span><span class="badge ${cls}">${label}</span></div>`;
+  h+=`<p class="post">${esc(c.post_text)}</p>`;
+  if(c.reading_warning) h+=`<div class="caution">${esc(c.reading_warning)}</div>`;
+  if(c.composite_note) h+=`<div class="caution">${esc(c.composite_note)}</div>`;
+  if(c.attributed_to) h+=`<div class="meta">النسبة كما وردت في المنشور: ${esc(c.attributed_to)}</div>`;
+  if(c.publisher_grade) h+=`<div class="meta">الحكم كما ورد في المنشور: ${esc(c.publisher_grade)}</div>`;
+  if(c.cited_reference) h+=`<div class="meta">المرجع الذي ذكره المنشور: ${esc(c.cited_reference)} (لم يُتحقق منه في هذه النسخة)</div>`;
+  if(c.quran) h+=quranBlock(c.quran);
+  if(c.source_text){
+    if(c.state==='found_different'){
+      h+=`<div class="diff"><div class="src"><b>نص المنشور</b>${esc(c.post_text)}</div><div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div></div>`;
+      h+=c.partial?`<div class="caution">نص المنشور مقتطع من لفظ أطول في المصدر، والأحكام أدناه على اللفظ بتمامه كما في المصدر.</div>`:`<div class="caution">الأحكام أدناه تخص لفظ المصدر وحده، ولا تُنقل إلى لفظ المنشور.</div>`;
+    } else h+=`<div class="src"><b>نص المصدر</b>${esc(c.source_text)}</div>`;
+  }
+  if((c.verdicts||[]).length) h+=`<div class="meta"><b>الأحكام المنقولة على نص المصدر أعلاه:</b></div>`;
+  if(c.entry_id&&c.reviewed===false) h+=`<div class="meta"><span class="unc">لم يقابل مراجع الأداة أحكام هذا المدخل على النسخ المطبوعة بعد.</span></div>`;
+  (c.verdicts||[]).forEach(v=>{h+=`<div class="v">قال ${esc(v.by)}: «${esc(v.text)}»<small>${esc(v.book)}، ${esc(v.location)}${v.unconfirmed?' <span class="unc">· لم تُراجَع الصفحة الأصلية بعد</span>':''}</small></div>`});
+  (c.takhrij_no_verdict||[]).forEach(t=>{h+=`<div class="v">تخريج دون حكم: ${esc(t.takhrij_only)}<small>${esc(t.book)}، ${esc(t.location)}</small></div>`});
+  if((c.dorar||[]).length){
+    h+=`<div class="meta"><b>الألفاظ المطابقة في الموسوعة الحديثية، ولكلٍّ حكمه:</b></div>`;
+    c.dorar.forEach(r=>{h+=`<div class="v"><span class="src" style="display:block;margin:4px 0;font-size:1.1rem">${esc(r.matn)}</span>خلاصة حكم المحدث${r.muhaddith?' ('+esc(r.muhaddith)+')':''} كما في الموسوعة: «${esc(r.grade)}»<small>${esc(r.book||'')}${r.location?'، '+esc(r.location):''}${r.rawi?' · الراوي: '+esc(r.rawi):''} · ${WORDING(r)}</small></div>`});
+  }
+  if(c.authentic_alternative) h+=`<div class="v">الوارد في الصحيح، كما نقله ${esc(c.authentic_alternative.by)}: «${esc(c.authentic_alternative.text)}»<small>${esc(c.authentic_alternative.location)}</small></div>`;
+  if(c.note) h+=`<div class="meta">${esc(c.note)}</div>`;
+  if(c.caution) h+=`<div class="caution">${esc(c.caution)}</div>`;
+  if(c.scope) h+=`<div class="meta">نطاق البحث: ${esc(c.scope)}</div>`;
+  if(c.dorar_link) h+=`<div class="meta"><a href="${esc(c.dorar_link)}" target="_blank" rel="noopener">افتح نتائج البحث في موقع الدرر السنية</a></div>`;
+  if((c.near_entries||[]).length){h+=`<div class="alt">في القاعدة نص قريب من هذا اللفظ وليس هو، وله حكم مستقل لا يُعرض هنا ولا ينطبق على لفظ المنشور. ألصقه وحده لترى بطاقته:`;c.near_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
+  if((c.similar_entries||[]).length){h+=`<div class="alt">للحديث ألفاظ أخرى في القاعدة، لكلٍّ منها حكم مستقل لا يُعرض هنا، ولا تنطبق عليه الأحكام أعلاه. ألصق اللفظ وحده لترى بطاقته:`;c.similar_entries.forEach(s=>{h+=`<q>${esc(s.matn)}</q>`});h+=`</div>`}
+  const subj=encodeURIComponent('مُسنِد AI: بلاغ عن بطاقة'+(c.entry_id?' '+c.entry_id:''));
+  const body=encodeURIComponent('نص المنشور: '+(c.post_text||'')+'\nالحالة: '+label+(c.entry_id?'\nالمدخل: '+c.entry_id:'')+'\n\nملاحظتي:\n');
+  h+=`<div class="meta report"><a href="mailto:mosnidai01@gmail.com?subject=${subj}&body=${body}">أبلغ عن خطأ في هذه البطاقة</a></div>`;
+  return h+'</article>';
+}
+
+const setStatus=(t,busy)=>{$('status').textContent=t;$('status').classList.toggle('busy',!!busy);$('how').classList.toggle('busy',!!busy);if(busy)$('how').classList.remove('done')};
+$('go').addEventListener('click',async()=>{
+  const text=$('txt').value.trim();
+  if(!text&&!imageB64){setStatus('الصق صورة المنشور أو نصه أولاً.');return}
+  $('go').disabled=true; $('out').innerHTML='';
+  setStatus(imageB64&&!text?'جارٍ قراءة الصورة والبحث في المصادر. قد يستغرق ذلك حتى نصف دقيقة.':'جارٍ البحث في المصادر…',true);
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify(imageB64&&!text?{image:imageB64,mediaType:'image/jpeg'}:{text})});
+    const d=await r.json();
+    if(!r.ok){setStatus(d.error||'حدث خطأ.');return}
+    if(d.status==='unreadable'||d.status==='recitation'){setStatus(d.message);return}
+    setStatus(d.notice||(d.cards.length?'':'لم يُعثر في المنشور على آية أو حديث أو قول منسوب للتحقق منه.'));
+    $('out').innerHTML=d.cards.map(card).join('');
+    $('how').classList.add('done');
+    if(d.cards.length) $('status').scrollIntoView({block:'start'});
+  }catch(e){setStatus('تعذّر الاتصال بالخادم. أعد المحاولة.')}
+  finally{$('go').disabled=false}
+});
+</script>
+</body>
+</html>
