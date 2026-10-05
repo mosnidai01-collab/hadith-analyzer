@@ -179,7 +179,7 @@ function buildCard(claim) {
     base.type = claim.type;
   }
 
-  if (claim.type === 'آية') return quranCard(base, claim.text);
+  if (claim.type === 'آية') return quranCard(base, claim.text, !!claim.from_image);
 
   const m = bestMatch(claim.text);
   const scope = `بُحث في قاعدة الأحكام الموثقة لدى الأداة (${DB.entries.length} مدخلاً). غياب النتيجة لا يعني عدم صحة النص.`;
@@ -251,7 +251,9 @@ function groupLocations(results) {
   return [...g.entries()].map(([where, names]) => ({ where, riwayat: names }));
 }
 
-function quranCard(base, rawText) {
+// fromImage: النص مقروء من صورة. ثبت في الاختبار (5 أكتوبر) أن النموذج قد يكتب تشكيل الآية المعتاد من حفظه
+// بدل ما في الصورة، فلا تُبنى تسمية الرواية على تشكيل مقروء من صورة، ويُكتفى بالمطابقة على الرسم.
+function quranCard(base, rawText, fromImage = false) {
   const { text, attributed } = stripQuranWrap(rawText);
   if (attributed && !base.attributed_to) base.attributed_to = attributed;
   let m;
@@ -277,6 +279,8 @@ function quranCard(base, rawText) {
   const occ = Math.max(...m.results.map((r) => r.occurrences));
   const repeated = occ > 1 ? `ورد هذا اللفظ في ${occ} مواضع من القرآن، ويُعرض أولها.` : null;
 
+  if (fromImage && (m.kind === 'vocal_none' || m.vocalized)) { m.kind = 'match'; m.vocalized = false; }
+
   if (m.kind === 'vocal_none') {
     const near = byKey[m.nearest];
     return { ...base, state: 'quran_different', scope: QURAN_SCOPE,
@@ -292,6 +296,9 @@ function quranCard(base, rawText) {
   if (m.imlaei_only) {
     summary = `يوافق الآية (${locText(m.results[0].best)}) في رواية حفص عن عاصم بالرسم الإملائي. ولا يمكن تحديد الرواية دون تشكيل.`;
     shown = m.results[0];
+  } else if (!m.vocalized && fromImage) {
+    summary = 'يوافق رسم الآية في الروايات المعتمدة. ولا تُحدَّد الرواية من الصورة، لأن قراءة التشكيل من الصور غير مضمونة؛ لتحديدها الصق نص الآية مشكولاً كما في المنشور.';
+    shown = byKey.hafs || m.results[0];
   } else if (!m.vocalized) {
     summary = 'يوافق رسم الآية في الروايات المعتمدة، ولا يمكن تحديد الرواية دون تشكيل.';
     shown = byKey.hafs || m.results[0];
@@ -594,11 +601,7 @@ exports.handler = async (event) => {
         : null;
     });
 
-    const cards = ex.claims.map(buildCard).filter(Boolean);
-    // الآية المقروءة من صورة: التشكيل من قراءة النموذج، وعليه تُبنى تسمية الرواية
-    if (body.image) cards.forEach((c) => {
-      if (c.quran) c.quran.image_caution = 'قُرئ تشكيل الآية من الصورة بالنموذج، وعليه بُنيت المقارنة بالروايات؛ فقارنه بالأصل قبل الاعتماد على تسمية الرواية.';
-    });
+    const cards = ex.claims.map((c) => buildCard({ ...c, from_image: !!body.image })).filter(Boolean);
     await enrichWithDorar(cards, deadline);
     return reply(200, { status: 'ok', confidence: ex.confidence, model_used: model, cards,
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
