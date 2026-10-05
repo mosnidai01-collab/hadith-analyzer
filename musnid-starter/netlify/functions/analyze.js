@@ -475,10 +475,12 @@ function parseModelJson(data) {
   }
   const txt = ((cands[0].content && cands[0].content.parts) || []).map((p) => p.text || '').join('').trim();
   const clean = txt.replace(/```json|```/g, '').trim();
+  // سبب التوقف وطول الرد وآخره يُسجَّلان لتشخيص الردود المقطوعة (لا يُسجَّل نص المنشور كاملاً)
+  const why = `[finish=${cands[0].finishReason || '?'} len=${txt.length} tail=${JSON.stringify(txt.slice(-60))} usage=${JSON.stringify(data.usageMetadata || {})}]`;
   const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
-  if (s < 0 || e < 0) throw new ApiError('رد المزوّد ليس JSON صالحاً', 502);
+  if (s < 0 || e < 0) throw new ApiError(`رد المزوّد ليس JSON صالحاً ${why}`, 502);
   try { return JSON.parse(clean.slice(s, e + 1)); }
-  catch { throw new ApiError('رد المزوّد ليس JSON صالحاً', 502); }
+  catch { throw new ApiError(`رد المزوّد ليس JSON صالحاً ${why}`, 502); }
 }
 
 // تعيد قائمة مشكلات بنيوية؛ لا نصلح شيئاً بصمت.
@@ -504,7 +506,7 @@ async function extract({ text, image, mediaType }, hardDeadline) {
 
   // مخطط إلزامي للرد: يمنع JSON المكسور في المنشورات الطويلة متعددة الادعاءات (ثبت في P06، 5 أكتوبر)
   const STR = { type: 'STRING' }, NSTR = { type: 'STRING', nullable: true };
-  const gen = { responseMimeType: 'application/json', maxOutputTokens: 8192,
+  const gen = { responseMimeType: 'application/json', maxOutputTokens: 32768,
     responseSchema: { type: 'OBJECT', required: ['readable', 'confidence', 'full_text', 'claims'],
       properties: { readable: { type: 'BOOLEAN' }, confidence: { type: 'NUMBER' }, full_text: STR,
         claims: { type: 'ARRAY', items: { type: 'OBJECT', required: ['type', 'text', 'uncertain'],
