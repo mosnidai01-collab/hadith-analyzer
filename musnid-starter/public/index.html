@@ -88,6 +88,15 @@ button.ghost{border-color:var(--line);font-weight:400;padding:9px 16px;font-size
 button.ghost:hover{border-color:var(--violet);color:var(--violet)}
 button:disabled{opacity:.55;cursor:wait}
 .actions .note{color:var(--mute);font-size:.85rem}
+.txt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px;min-height:34px}
+.panel .txt-head .hint{margin:0}
+.txt-head button{padding:4px 14px;font-size:.88rem}
+.txt-btns{display:flex;gap:8px}
+.mic{display:inline-flex;align-items:center;gap:6px}
+.mic[aria-pressed="true"]{background:#FDECEC;border-color:#D64545;color:#B42318}
+.mic[aria-pressed="true"] svg{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.dict-note{margin:0 0 8px;font-size:.85rem;color:var(--warn);line-height:1.6}
 
 /* مراحل الفحص: متصلة بخط، وتتحرك أثناء الفحص وتكتمل عند النتيجة */
 .how{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:18px 0 0;padding:0;list-style:none;counter-reset:s;position:relative}
@@ -210,7 +219,14 @@ footer b{color:#DDE1FA;font-weight:600}
     </div>
 
     <div class="or">أو</div>
-    <label for="txt" class="hint" style="display:block;margin:0 0 6px">نص المنشور</label>
+    <div class="txt-head">
+      <label for="txt" class="hint">نص المنشور</label>
+      <span class="txt-btns">
+        <button type="button" class="ghost mic" id="micBtn" hidden aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micLabel">إملاء</span></button>
+        <button type="button" class="ghost" id="clearTxt" hidden>مسح النص</button>
+      </span>
+    </div>
+    <p class="dict-note" id="dictNote" hidden></p>
     <textarea id="txt" placeholder="ألصق نص المنشور هنا"></textarea>
 
     <div class="actions">
@@ -236,7 +252,7 @@ footer b{color:#DDE1FA;font-weight:600}
 
 <footer>
   <div class="in">
-    <p class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي لقراءته (Anthropic Claude، وGoogle Gemini إن تعذّر الأول)، ويخضع لشروط المزوّد. وما لم يوجد في قاعدة الأداة يُبحث عن نصه في الموسوعة الحديثية بموقع الدرر السنية.</p>
+    <p class="notice">أداة مدعومة بالذكاء الاصطناعي، تنقل ما في المصادر ولا تُصدر أحكاماً، ولا تغني عن مختص. لا نخزّن الصور ولا النصوص، ولا حسابات ولا سجل للمستخدمين. يُرسَل النص أو الصورة إلى مزوّد النموذج اللغوي لقراءته (Anthropic Claude، وGoogle Gemini إن تعذّر الأول)، ويخضع لشروط المزوّد. وعند الإملاء بالميكروفون يُرسَل الصوت إلى خدمة التعرف على الكلام في المتصفح، ولا نحفظه. وما لم يوجد في قاعدة الأداة يُبحث عن نصه في الموسوعة الحديثية بموقع الدرر السنية.</p>
     <p><b>من أين تأتي النتائج:</b></p>
     <ul class="srcs">
       <li><b>القرآن الكريم:</b> ثماني روايات من الموسوعة القرآنية (Quranpedia)، وتُعرض بخطوط مجمع الملك فهد لطباعة المصحف الشريف.</li>
@@ -252,6 +268,7 @@ footer b{color:#DDE1FA;font-weight:600}
 <script>
 const $=id=>document.getElementById(id);
 let imageB64=null;
+let lastInput='text'; // آخر ما أدخله المستخدم: الصورة أو النص، وهو الذي يُفحص
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---------- الصورة: لصق، أو سحب، أو اختيار ملف ----------
@@ -264,7 +281,7 @@ function setImage(file){
     c.width=im.width*k; c.height=im.height*k;
     c.getContext('2d').drawImage(im,0,0,c.width,c.height);
     const url=c.toDataURL('image/jpeg',.85);
-    imageB64=url.split(',')[1];
+    imageB64=url.split(',')[1]; lastInput='image';
     $('preview').src=url; $('thumb').classList.add('on');
     $('status').textContent='';
     updateWhich();
@@ -273,9 +290,14 @@ function setImage(file){
   im.src=URL.createObjectURL(file);
 }
 function clearImage(){imageB64=null;$('thumb').classList.remove('on');$('preview').removeAttribute('src');$('img').value='';updateWhich()}
+function syncClear(){$('clearTxt').hidden=!$('txt').value.trim()}
+const useImage=()=>!!imageB64&&(lastInput==='image'||!$('txt').value.trim());
 function updateWhich(){
   const t=$('txt').value.trim();
-  $('which').textContent=imageB64&&t?'سيُفحص النص الملصق؛ أزل النص لفحص الصورة.':imageB64?'سيُفحص نص الصورة.':'';
+  $('which').textContent=imageB64&&t?(useImage()?'ستُفحص الصورة، ولن يُفحص النص المكتوب في الخانة.':'سيُفحص النص المكتوب، ولن تُفحص الصورة.'):imageB64?'ستُفحص الصورة.':'';
+  $('txt').style.opacity=imageB64&&t&&useImage()?'.55':'';
+  $('thumb').style.opacity=imageB64&&t&&!useImage()?'.55':'';
+  syncClear();
 }
 $('img').addEventListener('change',e=>{const f=e.target.files[0]; if(f) setImage(f)});
 const touch=matchMedia('(pointer:coarse)').matches;
@@ -307,11 +329,47 @@ document.addEventListener('paste',e=>{
   if(!item) return;
   e.preventDefault(); setImage(item.getAsFile());
 });
+
+// ---------- الإملاء بالميكروفون (خاصية التعرف على الكلام في المتصفح) ----------
+// يُكتب الكلام في خانة النص ليراجعه المستخدم ويصحّحه قبل التحقق، ولا يُفحص شيء دون ضغطه «تحقّق».
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+  const rec=new SR(); rec.lang='ar-SA'; rec.continuous=true; rec.interimResults=true;
+  let on=false, base='', timer=null;
+  const note=t=>{$('dictNote').textContent=t;$('dictNote').hidden=!t};
+  const stop=()=>{ if(on) rec.stop(); };
+  $('micBtn').hidden=false;
+  $('micBtn').addEventListener('click',()=>{
+    if(on){stop();return}
+    base=$('txt').value.replace(/\s+$/,''); if(base) base+=' ';
+    try{rec.start()}catch(e){}
+  });
+  rec.onstart=()=>{on=true;$('micBtn').setAttribute('aria-pressed','true');$('micLabel').textContent='إيقاف';
+    note('يُرسَل صوتك إلى خدمة التعرف على الكلام في متصفحك (Google في Chrome) لتحويله إلى نص، ولا نحفظه. تكلّم الآن.');
+    clearTimeout(timer); timer=setTimeout(stop,60000);};
+  rec.onresult=e=>{
+    let fin='',tmp='';
+    for(let i=0;i<e.results.length;i++){ (e.results[i].isFinal?(fin+=e.results[i][0].transcript+' '):(tmp+=e.results[i][0].transcript)); }
+    $('txt').value=(base+fin+tmp).replace(/\s+/g,' ');
+    lastInput='text'; updateWhich();
+  };
+  rec.onerror=e=>{
+    note(e.error==='not-allowed'||e.error==='service-not-allowed'?'لم يُسمح باستعمال الميكروفون. اكتب النص أو ألصقه في الخانة.':
+         e.error==='no-speech'?'لم يُسمع كلام. اضغط «إملاء» وتكلّم.':
+         e.error==='network'?'تعذّر الاتصال بخدمة التعرف على الكلام. اكتب النص أو ألصقه.':'تعذّر الإملاء. اكتب النص أو ألصقه في الخانة.');
+  };
+  rec.onend=()=>{on=false;clearTimeout(timer);$('micBtn').setAttribute('aria-pressed','false');$('micLabel').textContent='إملاء';
+    if($('txt').value.trim()&&!/لم يُ|تعذّر/.test($('dictNote').textContent))
+      note('راجع النص وصحّحه قبل التحقق: قد يكتب التعرف الآلي اللفظ المشهور بدل ما نطقته بالضبط.');
+  };
+  $('clearTxt').addEventListener('click',()=>{stop();note('')});
+}
 $('clearImg').addEventListener('click',clearImage);
 // أمثلة جاهزة للتجربة بضغطة: نصوص من مجموعة الاختبار، ونص الآية من بيانات المصحف في الأداة (رواية ورش، البقرة 5)
 const EXAMPLES={"list": "أحاديث منتشرة لا تصح عن رمضان\n1. صوموا تصحوا (ضعيف)\n2. يوم صومكم يوم نحركم (لا أصل له)\n3. أول شهر رمضان رحمة، وأوسطه مغفرة، وآخره عتق من النار (منكر)\n4. خمس يفطرن الصائم وينقضن الوضوء: الكذب، والنميمة، والغيبة، والنظر بشهوة، واليمين الكاذبة (ضعيف)\n5. إن للصائم عند فطره دعوة لا ترد (ضعيف)\n6. رجب شهر الله، وشعبان شهري، ورمضان شهر أمتي (مكذوب)", "conflict": "قال رسول الله ﷺ: إن للصائم عند فطره دعوة ما ترد", "warsh": "إِنَّ اَ۬لذِينَ كَفَرُواْ سَوَآءٌ عَلَيْهِمُۥٓ ءَآنذَرْتَهُمُۥٓ أَمْ لَمْ تُنذِرْهُمْ لَا يُومِنُونَۖ"};
-document.querySelectorAll('#examples button').forEach(b=>b.addEventListener('click',()=>{clearImage();$('txt').value=EXAMPLES[b.dataset.ex];updateWhich();$('go').click()}));
-$('txt').addEventListener('input',updateWhich);
+document.querySelectorAll('#examples button').forEach(b=>b.addEventListener('click',()=>{clearImage();$('txt').value=EXAMPLES[b.dataset.ex];lastInput='text';updateWhich();$('go').click()}));
+$('txt').addEventListener('input',()=>{lastInput='text';updateWhich()});
+$('clearTxt').addEventListener('click',()=>{$('txt').value='';updateWhich();$('txt').focus()});
 
 const BADGE={found_verdict:['وُجد بحكم منقول','b-ok'],found_no_verdict:['وُجد دون حكم منقول','b-warn'],
  found_different:['وُجد بلفظ مختلف','b-warn'],not_found:['لم يُعثر على مرجع','b-mute'],
@@ -393,11 +451,12 @@ const setStatus=(t,busy)=>{$('status').textContent=t;$('status').classList.toggl
 $('go').addEventListener('click',async()=>{
   const text=$('txt').value.trim();
   if(!text&&!imageB64){setStatus('ألصق صورة المنشور أو نصه أولاً.');return}
+  const img=useImage();
   $('go').disabled=true; $('out').innerHTML='';
-  setStatus(imageB64&&!text?'جارٍ قراءة الصورة والبحث في المصادر. قد يستغرق ذلك حتى نصف دقيقة.':'جارٍ البحث في المصادر…',true);
+  setStatus(img?'جارٍ قراءة الصورة والبحث في المصادر. قد يستغرق ذلك حتى نصف دقيقة.':'جارٍ البحث في المصادر…',true);
   try{
     const r=await fetch('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify(imageB64&&!text?{image:imageB64,mediaType:'image/jpeg'}:{text})});
+      body:JSON.stringify(img?{image:imageB64,mediaType:'image/jpeg'}:{text})});
     const d=await r.json();
     if(!r.ok){setStatus(d.error||'حدث خطأ.');return}
     if(d.status==='unreadable'||d.status==='recitation'){setStatus(d.message);return}

@@ -102,29 +102,30 @@ function dice(a, b) {
 // أربع كلمات متتابعة في أي موضع من اللفظ، أو ثلاث إن كانت أول اللفظ (المنشور يقتبس مطلع الحديث).
 const PARTIAL_MIN_TOKENS = 4;
 const PREFIX_MIN_TOKENS = 3;
+// تساهل يسير في حرف العطف أول الكلمة («هو شهر» = «وهو شهر» في المصدر)
+const sameTok = (a, b) => a === b || b === 'و' + a || a === 'و' + b || b === 'ف' + a || a === 'ف' + b;
 function containsRun(text, matn) {
   const A = tokens(text), B = tokens(matn);
   if (A.length < PREFIX_MIN_TOKENS || A.length >= B.length) return false;
-  if (A.length < PARTIAL_MIN_TOKENS) return A.every((t, j) => B[j] === t);
+  if (A.length < PARTIAL_MIN_TOKENS) return A.every((t, j) => sameTok(t, B[j]));
   for (let i = 0; i + A.length <= B.length; i++) {
     let ok = true;
-    for (let j = 0; j < A.length; j++) if (B[i + j] !== A[j]) { ok = false; break; }
+    for (let j = 0; j < A.length; j++) if (!sameTok(A[j], B[i + j])) { ok = false; break; }
     if (ok) return true;
   }
   return false;
 }
 
+// الأولوية: (1) لفظ مطابق تماماً، (2) لفظ يحوي نص المنشور بحروفه متتابعاً (المنشور مقتطع منه)،
+// (3) أقرب لفظ بنسبة التشابه. فالاتفاق التام في اللفظ ولو داخل حديث أطول مقدَّم على لفظ قريب مختلف
+// (مثال: «هو شهر أوله رحمة…» بحروفه في خطبة سلمان V006، لا «أول شهر رمضان رحمة…» V003).
 function bestMatch(text) {
   let best = null;
   for (const e of DB.entries) {
     const s = dice(text, e.matn);
     if (!best || s > best.score) best = { entry: e, score: s };
   }
-  if (best && best.score >= MATCH_CLOSE) {
-    if (containsRun(text, best.entry.matn)) best.partial = true;
-    return best;
-  }
-  // لا تقارب كافياً: نبحث عن لفظ يحوي نص المنشور حرفياً متتابعاً، ونختار أقصرها
+  if (best && best.score >= MATCH_EXACT) return best;
   let part = null;
   for (const e of DB.entries) {
     if (containsRun(text, e.matn) && (!part || tokens(e.matn).length < tokens(part.entry.matn).length)) {
@@ -348,7 +349,9 @@ const DIRECT_MAX_TOKENS = 60;
 // يتسامح مع التشكيل بين الحروف، ومع ﷺ بين «رسول» و«الله» كما يقع في الصور
 const DZ = (w) => w.split('').map((ch) => ch + '[ً-ْٰـ]*').join('');
 const SAYS_RE = new RegExp('(?:' + ['قال', 'يقول', 'وقال', 'فقال'].map(DZ).join('|') + ')\\s+(?:' +
-  DZ('رسول') + '\\s*(?:ﷺ\\s*)?' + DZ('الله') + '|' + DZ('النبي') + '|' + DZ('نبي') + '\\s+' + DZ('الله') + ')' +
+  DZ('رسول') + '\\s*(?:ﷺ\\s*)?' + DZ('الله') + '|' + DZ('النبي') + '|' + DZ('نبي') + '\\s+' + DZ('الله') +
+  // «قال ﷺ» و«قال صلى الله عليه وسلم» دون ذكر الاسم
+  '|(?=ﷺ|' + DZ('صلى') + '\\s+' + DZ('الله') + ')' + ')' +
   '\\s*(?:ﷺ|' + DZ('صلى') + '\\s+' + DZ('الله') + '\\s+' + DZ('عليه') + '\\s+(?:' + DZ('وآله') + '\\s+)?' + DZ('وسلم') + '|\\(ﷺ\\))?\\s*[:：،,]?', 'g');
 function splitAttribution(raw) {
   const text = String(raw || '').trim();
