@@ -122,6 +122,7 @@ function quranBlock(q){
   }
   const QP={hafs:1,warsh:4,bazzi:5,doori:6,qaloon:7,qumbul:8,shouba:9,soosi:10};
   if(QP[q.source.riwaya]&&q.source.sura_no) h+=`<div class="meta"><a href="https://quranpedia.net/surah/${QP[q.source.riwaya]}/${q.source.sura_no}" target="_blank" rel="noopener">افتح السورة في الموسوعة القرآنية (Quranpedia) برواية ${esc(q.source.riwaya_name)}</a></div>`;
+  if(q.image_caution) h+=`<div class="caution">${esc(q.image_caution)}</div>`;
   if(q.repeated) h+=`<div class="meta">${esc(q.repeated)}</div>`;
   if(q.missing) h+=`<div class="meta">لا يوافق رسمُه رواية: ${esc(q.missing.join('، '))}.</div>`;
   if((q.others||[]).length){
