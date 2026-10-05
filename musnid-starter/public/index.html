@@ -134,7 +134,7 @@ function quranBlock(q){
 }
 
 function card(c){
-  const [label,cls]=c.partial?['وُجد ضمن لفظ أطول','b-warn']:(BADGE[c.state]||['—','b-mute']);
+  const [label,cls]=c.dorar_failed?['تعذّر البحث في الدرر','b-warn']:c.partial?['وُجد ضمن لفظ أطول','b-warn']:(BADGE[c.state]||['—','b-mute']);
   let h=`<article class="card"><div class="head"><span>${esc(c.type)}</span><span class="badge ${cls}">${label}</span></div>`;
   h+=`<p class="post">${esc(c.post_text)}</p>`;
   if(c.reading_warning) h+=`<div class="caution">${esc(c.reading_warning)}</div>`;
