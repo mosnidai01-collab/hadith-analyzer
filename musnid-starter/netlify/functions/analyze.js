@@ -443,6 +443,8 @@ async function enrichWithDorar(cards, deadline) {
     if (r.error) {
       c.scope += ` وتعذّر البحث في الموسوعة الحديثية بالدرر في هذه المحاولة (${r.error}).`;
       c.dorar_link = link;
+      c.dorar_failed = true;
+      c.note = 'تعذّر الاتصال بالموسوعة الحديثية (الدرر) الآن، وليس معنى هذا أن الحديث لا مرجع له. افتح رابط البحث أدناه، أو أعد المحاولة بعد قليل.';
       return;
     }
     const hits = dorarMatches(c.post_text, r.results);
@@ -679,7 +681,9 @@ exports.handler = async (event) => {
       if (c.attributed_to && !source.includes(norm(c.attributed_to))) c.attributed_to = null;
     });
 
-    const cards = ex.claims.map((c) => buildCard({ ...c, from_image: !!body.image })).filter(Boolean);
+    const seen = new Set();
+    const cards = ex.claims.map((c) => buildCard({ ...c, from_image: !!body.image })).filter(Boolean)
+      .filter((c) => { const k = c.type + '|' + norm(c.post_text); if (seen.has(k)) return false; seen.add(k); return true; });
     await enrichWithDorar(cards, deadline);
     return reply(200, { status: 'ok', confidence: ex.confidence, model_used: model, cards,
       skipped_info_claims: ex.claims.filter((c) => c.type === 'معلومة').length });
