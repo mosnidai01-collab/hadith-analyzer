@@ -355,10 +355,13 @@ if(SR){
   rec.onstart=()=>{on=true;$('micBtn').setAttribute('aria-pressed','true');$('micLabel').textContent='إيقاف';
     note('يُرسَل صوتك إلى خدمة التعرف على الكلام في متصفحك (Google في Chrome) لتحويله إلى نص، ولا نحفظه. تكلّم الآن.');
     clearTimeout(timer); timer=setTimeout(stop,60000);};
+  // في Chrome على أندرويد قد يحمل كل مقطع الكلامَ كله من أوله (نتائج تراكمية)، فيتكرر النص إن جُمعت المقاطع.
+  // لذلك: المقطع الذي يبدأ بما جُمع قبله يحل محله، والمقطع الذي ينتهي به ما جُمع لا يُضاف مرة أخرى.
+  const joinParts=parts=>{let out='';for(const p of parts){const s=p.replace(/\s+/g,' ').trim();if(!s)continue;
+    if(!out||s.startsWith(out))out=s;else if(!out.endsWith(s))out+=' '+s;}return out};
   rec.onresult=e=>{
-    let fin='',tmp='';
-    for(let i=0;i<e.results.length;i++){ (e.results[i].isFinal?(fin+=e.results[i][0].transcript+' '):(tmp+=e.results[i][0].transcript)); }
-    $('txt').value=(base+fin+tmp).replace(/\s+/g,' ');
+    const parts=[];for(let i=0;i<e.results.length;i++)parts.push(e.results[i][0].transcript);
+    $('txt').value=(base+joinParts(parts)).replace(/\s+/g,' ');
     lastInput='text'; updateWhich();
   };
   rec.onerror=e=>{
