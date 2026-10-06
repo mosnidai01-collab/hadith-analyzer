@@ -181,7 +181,15 @@ function buildCard(claim) {
     reading_warning: claim.reading_warning || null,
   };
 
-  if (claim.type === 'معلومة') return null; // لا بطاقة
+  if (claim.type === 'معلومة') {
+    // القاعدة هي الفيصل لا تصنيف النموذج: ما صنّفه «معلومة» وطابق مدخلاً في القاعدة تُعرض بطاقته
+    // (مثل الجملة الثانية في منشور مركّب لم تُوضع بين علامتي تنصيص)، وإلا فلا بطاقة.
+    const im = bestMatch(claim.text);
+    const ie = im && (im.score >= MATCH_CLOSE || im.partial) ? im.entry : null;
+    if (!ie || !((ie.verdicts || []).length || (ie.takhrij_no_verdict || []).length)) return null;
+    claim = { ...claim, type: ie.entry_type || 'حديث' };
+    base.type = claim.type;
+  }
 
   if (claim.type === 'حكم فقهي') {
     // القاعدة هي الفيصل لا تصنيف النموذج: إن طابق النص مدخلاً حديثياً في القاعدة عُرضت بطاقته.
