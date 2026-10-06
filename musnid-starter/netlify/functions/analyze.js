@@ -452,8 +452,20 @@ function buildCards(claim) {
   return c ? [c] : [];
 }
 
+// منشور من عدة أسطر قبل آخر صيغة نسبة (أحاديث متتابعة مثلاً): لا يُعدّ ما قبلها إسناداً، فلا مطابقة مباشرة
+// ويُترك للتقسيم الكامل، حتى لا تُعرض بطاقة السطر الأخير وحده وتسقط البقية.
+function manyLines(attributed) {
+  if (!attributed || !/\n/.test(attributed)) return false;
+  const pre = attributed.split(/\n+/).slice(0, -1).join('\n');
+  SAYS_RE.lastIndex = 0;
+  if (SAYS_RE.test(pre)) { SAYS_RE.lastIndex = 0; return true; }   // صيغة نسبة أخرى في سطر سابق
+  SAYS_RE.lastIndex = 0;
+  return tokens(pre).length >= 6 && !/^\s*(?:عن|روى|روي|وعن|حدثنا|أخبرنا)\s/.test(pre);   // الإسناد لا يُعدّ نصاً
+}
+
 function directMatch(raw) {
   const { attributed, matn: text } = splitAttribution(raw);
+  if (manyLines(attributed)) return null;
   const n = tokens(text).length;
   if (!n || n > DIRECT_MAX_TOKENS) return null;
   const m = bestMatch(text);
@@ -583,6 +595,7 @@ async function enrichWithDorar(cards, deadline) {
 async function directDorar(raw, deadline, requireWhole = true) {
   if (!DORAR_ENABLED) return null;
   const { attributed, matn: text } = splitAttribution(raw);
+  if (manyLines(attributed)) return null;
   const n = tokens(text).length;
   if (n < PREFIX_MIN_TOKENS || n > DIRECT_MAX_TOKENS) return null;
   const card = buildCard({ type: 'حديث', text, attributed_to: attributed });
