@@ -98,6 +98,19 @@ function dice(a, b) {
   return (2 * inter) / (A.length + B.length);
 }
 
+// أقرب مقطع من لفظ المدخل بطول نص المنشور (لنص مقتطع من لفظ طويل مع فرق كلمة أو أكثر).
+// يُستعمل لاقتراح «نص قريب» فقط، ولا تُنقل به أحكام.
+const NEAR_WINDOW_MIN = 0.6;
+function windowDice(post, matn) {
+  const P = tokens(post), M = tokens(matn);
+  const n = P.length;
+  if (n < 4 || !M.length) return 0;
+  const ps = P.join(' ');
+  let best = 0;
+  for (let i = 0; i < Math.max(1, M.length - n + 1); i++) best = Math.max(best, dice(ps, M.slice(i, i + n).join(' ')));
+  return best;
+}
+
 // هل كلمات المنشور متتابعة بعينها داخل لفظ المصدر؟ (منشور مقتطع من حديث أطول)
 // أربع كلمات متتابعة في أي موضع من اللفظ، أو ثلاث إن كانت أول اللفظ (المنشور يقتبس مطلع الحديث).
 const PARTIAL_MIN_TOKENS = 4;
@@ -191,8 +204,10 @@ function buildCard(claim) {
 
   if (!m || (m.score < MATCH_CLOSE && !m.partial)) {
     // نصوص قريبة في القاعدة (ليست اللفظ نفسه): تُعرض ألفاظها دون أحكامها، لأن لكل لفظ حكمه
-    const near = DB.entries.map((e) => ({ id: e.id, matn: e.matn, s: dice(claim.text, e.matn) }))
-      .filter((x) => x.s >= NEAR_MIN).sort((a, b) => b.s - a.s).slice(0, 2).map(({ id, matn }) => ({ id, matn }));
+    const near = DB.entries.map((e) => {
+      const s = dice(claim.text, e.matn), w = windowDice(claim.text, e.matn);
+      return { id: e.id, matn: e.matn, s: Math.max(s >= NEAR_MIN ? s : 0, w >= NEAR_WINDOW_MIN ? w : 0) };
+    }).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 2).map(({ id, matn }) => ({ id, matn }));
     return { ...base, state: 'not_found', scope, near_entries: near.length ? near : undefined,
       note: 'لم يُعثر على مرجع، يُحال إلى مختص.' };
   }
